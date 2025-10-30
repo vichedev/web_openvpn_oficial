@@ -1,9 +1,9 @@
 services:
-  web-openvpn-rediseño:  
+  web-openvpn-redise:  
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: web-openvpn-rediseño  
+    container_name: web-openvpn-redise  
     ports:
       - "8584:80"
     networks:

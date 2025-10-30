@@ -16,14 +16,14 @@ RUN npx vite build
 FROM nginx:alpine
 
 # Crear usuario no-root
-RUN addgroup -g 1001 web-openvpn-rediseño && \
-    adduser -D -u 1001 -G web-openvpn-rediseño -s /bin/sh -h /home/web-openvpn-rediseño web-openvpn-rediseño
+RUN addgroup -g 1001 web-openvpn-redise && \
+    adduser -D -u 1001 -G web-openvpn-redise -s /bin/sh -h /home/web-openvpn-redise web-openvpn-redise
 
 # Crear carpetas necesarias y asignar permisos
 RUN mkdir -p /var/cache/nginx/client_temp && \
     mkdir -p /run && \
     touch /run/nginx.pid && \
-    chown -R web-openvpn-rediseño:web-openvpn-rediseño /var/cache/nginx /run /usr/share/nginx/html
+    chown -R web-openvpn-redise:web-openvpn-redise /var/cache/nginx /run /usr/share/nginx/html
 
 # Copiar configuraciones
 COPY nginx/nginx.conf /etc/nginx/nginx.conf
