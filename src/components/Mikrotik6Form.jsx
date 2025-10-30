@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
+import Swal from "sweetalert2";
 
 const Mikrotik6Form = () => {
   const [formData, setFormData] = useState({
@@ -16,6 +17,97 @@ const Mikrotik6Form = () => {
 
   const [downloadUrl, setDownloadUrl] = useState("");
   const [showDownload, setShowDownload] = useState(false);
+
+  const showSuccessAlert = () => {
+    Swal.fire({
+      title: "¡Archivo OVPN Generado! 🎉",
+      html: `
+        <div class="text-left">
+          <p class="text-gray-700 mb-4">
+            La configuración para <strong>${formData.username}</strong> se ha generado exitosamente.
+          </p>
+          <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+            <h4 class="font-semibold text-green-800 mb-2">📋 Configuración:</h4>
+            <ul class="text-green-700 text-sm space-y-1">
+              <li>• Servidor: <strong>${formData.remote}</strong></li>
+              <li>• Puerto: <strong>${formData.port}</strong></li>
+              <li>• Protocolo: <strong>TCP</strong> (v6 solo TCP)</li>
+              <li>• Cifrado: <strong>${formData.cipher}</strong></li>
+            </ul>
+          </div>
+        </div>
+      `,
+      icon: "success",
+      iconColor: "#10B981",
+      background: "#F9FAFB",
+      confirmButtonColor: "#10B981",
+      confirmButtonText: "¡Ya puedes descargar!",
+      customClass: {
+        popup: "rounded-2xl shadow-2xl",
+        title: "text-2xl font-bold",
+      },
+    });
+  };
+
+  const showErrorAlert = (message) => {
+    Swal.fire({
+      title: "⚠️ Error",
+      text: message,
+      icon: "error",
+      iconColor: "#EF4444",
+      background: "#F9FAFB",
+      confirmButtonColor: "#EF4444",
+      confirmButtonText: "Entendido",
+      customClass: {
+        popup: "rounded-2xl shadow-xl",
+      },
+    });
+  };
+
+  const showMissingFilesAlert = () => {
+    Swal.fire({
+      title: "📁 Archivos Requeridos",
+      html: `
+        <div class="text-left">
+          <p class="text-gray-700 mb-4">
+            Por favor, selecciona todos los archivos de certificados requeridos:
+          </p>
+          <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <ul class="text-yellow-700 text-sm space-y-2">
+              <li>• 📄 <strong>Certificado CA</strong> (.crt)</li>
+              <li>• 📄 <strong>Certificado Cliente</strong> (.crt)</li>
+              <li>• 🔑 <strong>Llave Cliente</strong> (.key)</li>
+            </ul>
+          </div>
+        </div>
+      `,
+      icon: "warning",
+      iconColor: "#F59E0B",
+      background: "#F9FAFB",
+      confirmButtonColor: "#F59E0B",
+      confirmButtonText: "Seleccionar Archivos",
+      customClass: {
+        popup: "rounded-2xl shadow-xl",
+      },
+    });
+  };
+
+  const showDownloadSuccessAlert = () => {
+    Swal.fire({
+      title: "📥 ¡Descarga Exitosa!",
+      text: "La configuración OVPN se ha descargado correctamente",
+      icon: "success",
+      iconColor: "#3B82F6",
+      background: "#F9FAFB",
+      confirmButtonColor: "#3B82F6",
+      confirmButtonText: "OK",
+      timer: 2000,
+      timerProgressBar: true,
+      customClass: {
+        popup: "rounded-2xl shadow-xl",
+      },
+    });
+  };
 
   const handleInputChange = (e) => {
     const { id, value } = e.target;
@@ -37,7 +129,7 @@ const Mikrotik6Form = () => {
     e.preventDefault();
 
     if (!formData.caCert || !formData.clientCert || !formData.clientKey) {
-      alert("Por favor, selecciona todos los archivos requeridos.");
+      showMissingFilesAlert();
       return;
     }
 
@@ -81,13 +173,39 @@ ${clientKeyText}
       setDownloadUrl(url);
       setShowDownload(true);
 
-      alert("¡Archivo OVPN generado exitosamente! Ya puedes descargarlo.");
+      showSuccessAlert();
     } catch (error) {
       console.error("Error:", error);
-      alert(
+      showErrorAlert(
         "Ocurrió un error al generar el archivo. Por favor, verifica los archivos."
       );
     }
+  };
+
+  const handleDownload = () => {
+    showDownloadSuccessAlert();
+
+    // Limpiar el formulario después de un breve delay
+    setTimeout(() => {
+      setShowDownload(false);
+      setFormData({
+        remote: "",
+        username: "",
+        password: "",
+        port: "1194",
+        auth: "SHA1",
+        cipher: "AES-128-CBC",
+        caCert: null,
+        clientCert: null,
+        clientKey: null,
+      });
+
+      // También limpiar los inputs de archivos
+      const fileInputs = document.querySelectorAll('input[type="file"]');
+      fileInputs.forEach((input) => {
+        input.value = "";
+      });
+    }, 2000);
   };
 
   return (
@@ -115,7 +233,7 @@ ${clientKeyText}
 
             <FormField
               id="remote"
-              label="IP del Servidor:"
+              label="IP del Servidor Mikrotik:"
               type="text"
               placeholder="192.168.1.1"
               value={formData.remote}
@@ -125,7 +243,7 @@ ${clientKeyText}
 
             <FormField
               id="username"
-              label="Usuario:"
+              label="Usuario PPP:"
               type="text"
               placeholder="nombre_usuario"
               value={formData.username}
@@ -135,7 +253,7 @@ ${clientKeyText}
 
             <FormField
               id="password"
-              label="Contraseña:"
+              label="Contraseña PPP:"
               type="password"
               placeholder="••••••••"
               value={formData.password}
@@ -242,22 +360,7 @@ ${clientKeyText}
                   href={downloadUrl}
                   download={`${formData.username}_mikrotik6_config.ovpn`}
                   className="group relative bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-bold py-4 px-8 rounded-xl shadow-lg transition-all duration-300 transform hover:scale-105 flex items-center justify-center w-full"
-                  onClick={() => {
-                    setTimeout(() => {
-                      setShowDownload(false);
-                      setFormData({
-                        remote: "",
-                        username: "",
-                        password: "",
-                        port: "1194",
-                        auth: "SHA1",
-                        cipher: "AES-128-CBC",
-                        caCert: null,
-                        clientCert: null,
-                        clientKey: null,
-                      });
-                    }, 1000);
-                  }}
+                  onClick={handleDownload}
                 >
                   <span className="relative z-10 flex items-center">
                     📥 Descargar Configuración

@@ -47,7 +47,8 @@ const Footer = () => {
               </h4>
               <div className="space-y-3">
                 <a
-                  href="https://wa.link/l9kksa"
+                  href="https://wa.link/9jq3j9"
+                  target="_blank"
                   className="flex items-center text-gray-300 hover:text-white transition-colors group"
                 >
                   <FaWhatsapp className="text-green-400 mr-3 text-lg group-hover:scale-110 transition-transform" />
@@ -61,7 +62,8 @@ const Footer = () => {
                   <span>soporte@maat.ec</span>
                 </a>
                 <a
-                  href="tel:+593 99 103 1784"
+                  href="https://wa.link/9jq3j9"
+                  target="_blank"
                   className="flex items-center text-gray-300 hover:text-white transition-colors group"
                 >
                   <FaPhone className="text-purple-400 mr-3 text-lg group-hover:scale-110 transition-transform" />
