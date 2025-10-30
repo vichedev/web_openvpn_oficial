@@ -1,0 +1,15 @@
+services:
+  web-openvpn-rediseño:  
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: web-openvpn-rediseño  
+    ports:
+      - "8584:80"
+    networks:
+      - webnet
+    restart: always
+
+networks:
+  webnet:
+    driver: bridge

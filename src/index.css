@@ -1,0 +1,92 @@
+/* En tu archivo App.css */
+
+@import "tailwindcss";
+
+/* * Esto le dice a Tailwind 4 que aplique las variantes dark:
+ * cuando la clase .dark esté presente en el HTML.
+*/
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Eliminar scroll horizontal global */
+html,
+body {
+    overflow-x: hidden;
+    max-width: 100%;
+}
+
+/* Scroll vertical personalizado en tonos naranja suave */
+::-webkit-scrollbar {
+    width: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: #fff7ed;
+    /* orange-50 */
+    border-radius: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, #fed7aa, #fdba74);
+    /* orange-200 a orange-300 */
+    border-radius: 8px;
+    border: 2px solid #fff7ed;
+    transition: all 0.3s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, #fdba74, #fb923c);
+    /* orange-300 a orange-400 */
+    transform: scale(1.05);
+}
+
+::-webkit-scrollbar-thumb:active {
+    background: linear-gradient(135deg, #f97316, #ea580c);
+    /* orange-500 a orange-600 */
+}
+
+/* Para modo oscuro */
+.dark ::-webkit-scrollbar-track {
+    background: #431407;
+    /* orange-950 */
+}
+
+.dark ::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, #fb923c, #ea580c);
+    /* orange-400 a orange-600 */
+    border: 2px solid #431407;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, #f97316, #dc2626);
+    /* orange-500 a red-600 */
+}
+
+.dark ::-webkit-scrollbar-thumb:active {
+    background: linear-gradient(135deg, #ea580c, #b91c1c);
+    /* orange-600 a red-700 */
+}
+
+/* Para Firefox */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: #fdba74 #fff7ed;
+}
+
+.dark * {
+    scrollbar-color: #fb923c #431407;
+}
+
+/* Suavizar el scroll en todos los navegadores */
+html {
+    scroll-behavior: smooth;
+}
+
+/* Estilo adicional para contenedores con scroll interno */
+.scroll-container {
+    scrollbar-width: thin;
+    scrollbar-color: #fed7aa #fff7ed;
+}
+
+.dark .scroll-container {
+    scrollbar-color: #fb923c #431407;
+}
