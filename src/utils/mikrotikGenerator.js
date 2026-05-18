@@ -135,10 +135,10 @@ export function generateOvpnFile({
  * certificados, pool de IP, perfil PPP, usuario, servidor OVPN, firewall y NAT.
  *
  * @param {Object} opts
- * @param {"v6"|"v7"|"v7_modern"} opts.routerVersion  Version de RouterOS del servidor.
+ * @param {"v6"|"v7"} opts.routerVersion  RouterOS 6 o RouterOS 7 (cualquier 7.x).
  */
 export function generateServerScript({
-  routerVersion = "v7_modern",
+  routerVersion = "v7",
   publicIp = "<IP_PUBLICA_DEL_SERVIDOR>",
   port = VPN_DEFAULTS.port,
   proto = VPN_DEFAULTS.proto,
@@ -152,8 +152,8 @@ export function generateServerScript({
   dns = VPN_DEFAULTS.dns,
   profileName = VPN_DEFAULTS.profileName,
 } = {}) {
+  // Solo 2 ramas: RouterOS 6 o RouterOS 7. La rama v7 sirve para TODO 7.x.
   const isV6 = routerVersion === "v6";
-  const isModern = routerVersion === "v7_modern";
   const finalProto = isV6 ? "tcp" : (proto || "udp").toLowerCase();
   const cn = clientName || "cliente1";
 
@@ -203,22 +203,25 @@ export function generateServerScript({
   L.push("");
 
   L.push("# --- 7. ACTIVAR el servidor OpenVPN ---");
-  L.push("/interface ovpn-server server");
   if (isV6) {
-    // RouterOS 6: sintaxis "set", solo TCP, sin parametro protocol.
+    // RouterOS 6: servidor unico, sintaxis "set", solo TCP (sin parametro protocol).
+    L.push("/interface ovpn-server server");
     L.push("set enabled=yes certificate=server require-client-certificate=yes \\");
     L.push(`    auth=sha1,md5 cipher=${cipherList} \\`);
     L.push(`    default-profile=${profileName} netmask=${netmask} mode=ip port=${port}`);
-  } else if (isModern) {
-    // RouterOS 7.15+: sintaxis "add" (permite varios servidores).
-    L.push(`add name=ovpn-server1 certificate=server require-client-certificate=yes \\`);
-    L.push(`    auth=sha1,sha256 cipher=${cipherList} protocol=${finalProto} \\`);
-    L.push(`    default-profile=${profileName} netmask=${netmask} mode=ip port=${port} disabled=no`);
   } else {
-    // RouterOS 7 (6.15 - 7.14): sintaxis "set" con protocolo configurable.
-    L.push("set enabled=yes certificate=server require-client-certificate=yes \\");
-    L.push(`    auth=sha1,sha256 cipher=${cipherList} protocol=${finalProto} \\`);
-    L.push(`    default-profile=${profileName} netmask=${netmask} mode=ip port=${port}`);
+    // RouterOS 7: el bloque ":do" prueba la sintaxis nueva (add, 7.15+) y, si el
+    // router no la soporta, usa la clasica (set, 7.0-7.14). Asi UN solo script
+    // funciona en CUALQUIER version de RouterOS 7.
+    const common =
+      `certificate=server require-client-certificate=yes ` +
+      `auth=sha1,sha256 cipher=${cipherList} protocol=${finalProto} ` +
+      `default-profile=${profileName} netmask=${netmask} mode=ip port=${port}`;
+    L.push(":do {");
+    L.push(`  /interface ovpn-server server add name=ovpn-server1 ${common} disabled=no`);
+    L.push("} on-error={");
+    L.push(`  /interface ovpn-server server set enabled=yes ${common}`);
+    L.push("}");
   }
   L.push("");
 

@@ -31,9 +31,9 @@ Resumen del flujo:
 
 1. Abre la sección **Servidor**.
 2. Selecciona la versión de RouterOS:
-   - **v6 (Legacy)** — RouterOS 6. Solo TCP.
-   - **v7 (6.15–7.14)** — RouterOS 7, sintaxis con `set`.
-   - **v7.15+** — RouterOS 7.15 o superior, sintaxis con `add`.
+   - **RouterOS 6** — solo protocolo TCP, cifrados clásicos.
+   - **RouterOS 7** — un único script válido para cualquier 7.x (de la 7.0 a la
+     7.15+); el script se autoadapta a la sintaxis del router.
 3. Completa los datos:
    - **Nombre del cliente VPN** — el usuario (ej. `usuario01`).
    - **Contraseña del cliente** — mínimo 8 caracteres.

@@ -28,7 +28,7 @@ const STEPS = [
       "Entra en la sección «Servidor» de esta web. Selecciona la versión de tu RouterOS y completa los datos.",
     ],
     list: [
-      "Versión: v6 (RouterOS 6), v7 (6.15–7.14) o v7.15+ según tu router. Compruébalo en Winbox → System → Resources.",
+      "Versión: RouterOS 6 o RouterOS 7 (compruébalo en Winbox → System → Resources). El script de RouterOS 7 se autoadapta a cualquier versión 7.x, de la 7.0 a la 7.15+.",
       "Nombre del cliente VPN: el usuario que usará la persona (ej: usuario01).",
       "Contraseña del cliente: mínimo 8 caracteres. También protege la exportación de la llave.",
       "IP pública del servidor: la IP por la que se llega al MikroTik desde Internet.",

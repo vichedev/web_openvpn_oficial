@@ -6,13 +6,22 @@ import Swal from "sweetalert2";
 import { generateServerScript } from "../utils/mikrotikGenerator";
 
 const VERSIONS = [
-  { id: "v6", icon: "📟", label: "v6 (Legacy)", desc: "RouterOS 6 — solo TCP, sintaxis 'set'." },
-  { id: "v7", icon: "🚀", label: "v7 (6.15 - 7.14)", desc: "RouterOS 7 — UDP/TCP, sintaxis 'set'." },
-  { id: "v7_modern", icon: "🎯", label: "v7.15+", desc: "RouterOS 7.15+ — UDP/TCP, sintaxis 'add'." },
+  {
+    id: "v6",
+    icon: "📟",
+    label: "RouterOS 6",
+    desc: "RouterOS 6.x — solo protocolo TCP y cifrados clásicos (sin sufijo).",
+  },
+  {
+    id: "v7",
+    icon: "🚀",
+    label: "RouterOS 7",
+    desc: "RouterOS 7.x — un único script válido desde la 7.0 hasta la 7.15+ (se autoadapta).",
+  },
 ];
 
 const CertificateSection = () => {
-  const [selectedVersion, setSelectedVersion] = useState("v7_modern");
+  const [selectedVersion, setSelectedVersion] = useState("v7");
   const [clientName, setClientName] = useState("");
   const [clientPassword, setClientPassword] = useState("");
   const [caCrlHost, setCaCrlHost] = useState("");

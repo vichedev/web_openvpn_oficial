@@ -12,7 +12,8 @@ archivo `.ovpn` del cliente y el script para enlazar dos routers (site-to-site).
 | **Configurar** (`/configuracion`) | Genera el archivo `.ovpn` del cliente (con certificados embebidos) y un script `.rsc` para usar otro MikroTik como cliente. |
 | **Manual** (`/manual`) | Manual de usuario paso a paso, dentro de la propia web. |
 
-Compatible con **RouterOS 6**, **RouterOS 7 (6.15–7.14)** y **RouterOS 7.15+**.
+Compatible con **RouterOS 6** y **RouterOS 7** (un único script de RouterOS 7
+sirve para cualquier versión 7.x, de la 7.0 a la 7.15+).
 
 ## Cómo crear una VPN (resumen)
 
