@@ -56,7 +56,7 @@ const Nav = () => {
                   : "text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
               }`}
             >
-              Certificados
+              Servidor
             </Link>
             <Link
               to="/configuracion"
@@ -67,6 +67,16 @@ const Nav = () => {
               }`}
             >
               Configurar
+            </Link>
+            <Link
+              to="/manual"
+              className={`font-semibold transition-colors duration-300 ${
+                location.pathname === "/manual"
+                  ? "text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400"
+                  : "text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
+              }`}
+            >
+              Manual
             </Link>
             <Link
               to="/caracteristicas"
@@ -174,7 +184,7 @@ const Nav = () => {
                 }`}
                 onClick={closeMobileMenu}
               >
-                Certificados
+                Servidor
               </Link>
               <Link
                 to="/configuracion"
@@ -186,6 +196,17 @@ const Nav = () => {
                 onClick={closeMobileMenu}
               >
                 Configurar
+              </Link>
+              <Link
+                to="/manual"
+                className={`block font-semibold transition-colors duration-300 ${
+                  location.pathname === "/manual"
+                    ? "text-blue-600 dark:text-blue-400"
+                    : "text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
+                }`}
+                onClick={closeMobileMenu}
+              >
+                Manual
               </Link>
               <Link
                 to="/caracteristicas"

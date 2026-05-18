@@ -8,6 +8,7 @@ import Features from "./components/Features";
 import Downloads from "./components/Downloads";
 import Footer from "./components/Footer";
 import CertificateSection from "./components/CertificateSection"; // Importa el nuevo componente
+import Manual from "./components/Manual";
 import "./App.css";
 
 function App() {
@@ -25,8 +26,8 @@ function App() {
               <Route
                 path="/certificados"
                 element={<CertificateSection />}
-              />{" "}
-              {/* Nueva ruta */}
+              />
+              <Route path="/manual" element={<Manual />} />
             </Routes>
           </main>
           <Footer />

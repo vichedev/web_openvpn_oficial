@@ -1,151 +1,104 @@
-// 📁src/components/CertificateSection.jsx
-import React, { useState } from "react";
+// 📁 src/components/CertificateSection.jsx
+// Genera el script .rsc COMPLETO para convertir un MikroTik en servidor OpenVPN.
+import React, { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import Swal from "sweetalert2";
+import { generateServerScript } from "../utils/mikrotikGenerator";
+
+const VERSIONS = [
+  { id: "v6", icon: "📟", label: "v6 (Legacy)", desc: "RouterOS 6 — solo TCP, sintaxis 'set'." },
+  { id: "v7", icon: "🚀", label: "v7 (6.15 - 7.14)", desc: "RouterOS 7 — UDP/TCP, sintaxis 'set'." },
+  { id: "v7_modern", icon: "🎯", label: "v7.15+", desc: "RouterOS 7.15+ — UDP/TCP, sintaxis 'add'." },
+];
 
 const CertificateSection = () => {
   const [selectedVersion, setSelectedVersion] = useState("v7_modern");
   const [clientName, setClientName] = useState("");
   const [clientPassword, setClientPassword] = useState("");
   const [caCrlHost, setCaCrlHost] = useState("");
-  const [port, setPort] = useState("11977");
+  const [port, setPort] = useState("1194");
   const [protocol, setProtocol] = useState("udp");
-  const [showCommands, setShowCommands] = useState(false);
+  const [showScript, setShowScript] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-  const showSuccessAlert = () => {
-    Swal.fire({
-      title: "¡Configuración Generada! 🎉",
-      html: `
-        <div class="text-left">
-          <p class="text-gray-700 mb-4">
-            Se han generado los comandos para <strong>${clientName}</strong> correctamente.
-          </p>
-          <div class="bg-green-50 border border-green-200 rounded-lg p-4">
-            <h4 class="font-semibold text-green-800 mb-2">📋 Archivos que se generarán:</h4>
-            <ul class="text-green-700 text-sm space-y-1">
-              <li>• <strong>ca.crt</strong> - Certificado de la Autoridad</li>
-              <li>• <strong>${clientName}.crt</strong> - Certificado del cliente</li>
-              <li>• <strong>${clientName}.key</strong> - Llave privada</li>
-            </ul>
-          </div>
-        </div>
-      `,
-      icon: "success",
-      iconColor: "#10B981",
-      background: "#F9FAFB",
-      confirmButtonColor: "#10B981",
-      confirmButtonText: "¡Entendido!",
-      customClass: {
-        popup: "rounded-2xl shadow-2xl",
-        title: "text-2xl font-bold",
-      },
-    });
-  };
+  const versionInfo = VERSIONS.find((v) => v.id === selectedVersion);
+  const isV6 = selectedVersion === "v6";
 
-  const showCopyAlert = () => {
-    Swal.fire({
-      title: "📋 ¡Copiado!",
-      text: "Comando copiado al portapapeles",
-      icon: "success",
-      iconColor: "#3B82F6",
-      background: "#F9FAFB",
-      confirmButtonColor: "#3B82F6",
-      confirmButtonText: "OK",
-      timer: 1500,
-      timerProgressBar: true,
-      customClass: {
-        popup: "rounded-2xl shadow-xl",
-      },
-    });
-  };
+  // El script se recalcula automaticamente cuando cambia cualquier dato.
+  const serverScript = useMemo(
+    () =>
+      generateServerScript({
+        routerVersion: selectedVersion,
+        publicIp: caCrlHost || "<IP_PUBLICA_DEL_SERVIDOR>",
+        port: port || "1194",
+        proto: isV6 ? "tcp" : protocol,
+        clientName: clientName || "cliente1",
+        clientPassword: clientPassword || "<CLAVE_DEL_CLIENTE>",
+      }),
+    [selectedVersion, caCrlHost, port, protocol, clientName, clientPassword, isV6]
+  );
 
-  const showErrorAlert = () => {
+  const showErrorAlert = (text) =>
     Swal.fire({
-      title: "⚠️ Datos Incompletos",
-      text: "Por favor completa todos los campos requeridos",
+      title: "⚠️ Datos incompletos",
+      text,
       icon: "warning",
       iconColor: "#F59E0B",
       background: "#F9FAFB",
       confirmButtonColor: "#F59E0B",
       confirmButtonText: "Entendido",
-      customClass: {
-        popup: "rounded-2xl shadow-xl",
-      },
+      customClass: { popup: "rounded-2xl shadow-xl" },
+    });
+
+  const handleGenerate = (e) => {
+    e.preventDefault();
+    if (!clientName.trim()) return showErrorAlert("Indica el nombre del cliente VPN.");
+    if (clientPassword.length < 8)
+      return showErrorAlert("La contraseña debe tener al menos 8 caracteres.");
+    if (!caCrlHost.trim())
+      return showErrorAlert("Indica la IP pública del servidor MikroTik.");
+    if (!port) return showErrorAlert("Indica el puerto de OpenVPN.");
+
+    setShowScript(true);
+    Swal.fire({
+      title: "¡Script generado! 🎉",
+      text: `El script completo del servidor para ${clientName} está listo abajo.`,
+      icon: "success",
+      iconColor: "#10B981",
+      background: "#F9FAFB",
+      showConfirmButton: false,
+      timer: 1600,
+      timerProgressBar: true,
+      customClass: { popup: "rounded-2xl shadow-2xl", title: "text-xl font-bold" },
     });
   };
 
-  const handleGenerateCommands = (e) => {
-    e.preventDefault();
-    if (
-      clientName &&
-      clientPassword &&
-      clientPassword.length >= 8 &&
-      caCrlHost &&
-      port
-    ) {
-      setShowCommands(true);
-      showSuccessAlert();
-    } else {
-      showErrorAlert();
+  const copyAll = async () => {
+    try {
+      await navigator.clipboard.writeText(serverScript);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      showErrorAlert("No se pudo copiar. Selecciona el texto y cópialo manualmente.");
     }
   };
 
-  const copyToClipboard = (text) => {
-    navigator.clipboard.writeText(text);
-    showCopyAlert();
+  const downloadScript = () => {
+    const blob = new Blob([serverScript], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `servidor-openvpn_${clientName || "mikrotik"}.rsc`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
-
-  // Comandos base (iguales para todas las versiones)
-  const caCommands = `/certificate
-add name=ca common-name=ca key-usage=key-cert-sign,crl-sign days-valid=3065
-add name=server common-name=server`;
-
-  const signCommands = `/certificate
-sign ca ca-crl-host=${caCrlHost} name=ca
-sign server ca=ca name=server`;
-
-  const trustCommands = `/certificate
-set ca trusted=yes
-set server trusted=yes`;
-
-  const clientCertCommands = `/certificate
-add name=${clientName} common-name=${clientName}`;
-
-  const signClientCommands = `sign ${clientName} ca=ca name=${clientName}`;
-
-  const exportCommands = `/certificate export-certificate ca
-/certificate export-certificate ${clientName} export-passphrase=${clientPassword}`;
-
-  // ✅ COMANDOS OPENVPN CORREGIDOS SEGÚN VERSIÓN REAL
-  const getOvpnServerCommands = () => {
-    if (selectedVersion === "v6") {
-      // RouterOS v6 - Solo TCP, configuración extendida (sin parámetro protocol)
-      return `/interface ovpn-server server
-set auth=sha1,md5 certificate=server \\
-cipher=blowfish128,aes128,aes192,aes256 default-profile=default \\
-enabled=yes keepalive-timeout=disabled max-mtu=1500 mode=ip netmask=29 \\
-port=${port} require-client-certificate=yes`;
-    } else if (selectedVersion === "v7") {
-      // RouterOS v7 (6.15-7.14) - Protocolo configurable
-      return `/interface ovpn-server server
-set certificate=server cipher=blowfish128,aes128-cbc,aes192-cbc,aes256-cbc,aes128-gcm,aes192-gcm,aes256-gcm enabled=yes protocol=${protocol} require-client-certificate=yes port=${port}`;
-    } else {
-      // RouterOS v7.15+ - Sintaxis moderna con "add"
-      return `/interface ovpn-server server
-add certificate=server disabled=no name=ovpn-server1 port=${port} protocol=${protocol} require-client-certificate=yes`;
-    }
-  };
-
-  const ovpnServerCommands = getOvpnServerCommands();
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 pt-20 transition-colors duration-300">
-      {/* Elementos decorativos */}
       <div className="absolute inset-0 overflow-hidden dark:block hidden">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-green-500/10 rounded-full blur-3xl"></div>
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-teal-500/5 rounded-full blur-3xl"></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-teal-500/5 rounded-full blur-3xl"></div>
       </div>
-
       <div className="absolute inset-0 overflow-hidden dark:hidden">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-green-100 rounded-full blur-3xl"></div>
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-emerald-100 rounded-full blur-3xl"></div>
@@ -157,179 +110,129 @@ add certificate=server disabled=no name=ovpn-server1 port=${port} protocol=${pro
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8 }}
-          className="text-center mb-16"
+          className="text-center mb-12"
         >
           <h1 className="text-4xl md:text-6xl font-bold text-gray-800 dark:text-white mb-6">
-            Gestión de{" "}
+            Servidor{" "}
             <span className="text-transparent bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text">
-              Certificados
+              OpenVPN
             </span>
           </h1>
           <p className="text-xl text-gray-600 dark:text-green-200 max-w-3xl mx-auto">
-            Configuración correcta para cada versión de RouterOS
+            Genera el script completo que convierte tu MikroTik en servidor VPN:
+            certificados, usuario, firewall y NAT — todo en un solo paso.
           </p>
         </motion.div>
 
-        {/* Selector de Versión Mejorado */}
+        {/* Selector de versión */}
         <motion.div
-          className="flex justify-center mb-12"
+          className="flex flex-wrap justify-center gap-2 mb-10"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
+          transition={{ delay: 0.3 }}
         >
-          <div className="bg-white/80 dark:bg-white/10 backdrop-blur-lg rounded-2xl p-2 shadow-2xl border border-gray-200 dark:border-white/20">
-            <button
-              onClick={() => setSelectedVersion("v6")}
-              className={`px-6 py-3 rounded-xl font-bold text-base transition-all duration-300 ${
-                selectedVersion === "v6"
-                  ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg"
-                  : "text-gray-600 dark:text-amber-100 hover:bg-amber-50 dark:hover:bg-white/10"
-              }`}
-            >
-              <span className="flex items-center">
-                <span className="mr-2">📟</span>
-                v6 (Legacy)
-              </span>
-            </button>
-            <button
-              onClick={() => setSelectedVersion("v7")}
-              className={`px-6 py-3 rounded-xl font-bold text-base transition-all duration-300 ${
-                selectedVersion === "v7"
-                  ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg"
-                  : "text-gray-600 dark:text-blue-100 hover:bg-blue-50 dark:hover:bg-white/10"
-              }`}
-            >
-              <span className="flex items-center">
-                <span className="mr-2">🚀</span>
-                v7 (6.15-7.14)
-              </span>
-            </button>
-            <button
-              onClick={() => setSelectedVersion("v7_modern")}
-              className={`px-6 py-3 rounded-xl font-bold text-base transition-all duration-300 ${
-                selectedVersion === "v7_modern"
-                  ? "bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-lg"
-                  : "text-gray-600 dark:text-green-100 hover:bg-green-50 dark:hover:bg-white/10"
-              }`}
-            >
-              <span className="flex items-center">
-                <span className="mr-2">🎯</span>
-                v7.15+
-              </span>
-            </button>
+          <div className="bg-white/80 dark:bg-white/10 backdrop-blur-lg rounded-2xl p-2 shadow-2xl border border-gray-200 dark:border-white/20 flex flex-wrap gap-2 justify-center">
+            {VERSIONS.map((v) => (
+              <button
+                key={v.id}
+                onClick={() => setSelectedVersion(v.id)}
+                className={`px-5 py-3 rounded-xl font-bold text-sm md:text-base transition-all duration-300 ${
+                  selectedVersion === v.id
+                    ? "bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-lg"
+                    : "text-gray-600 dark:text-green-100 hover:bg-green-50 dark:hover:bg-white/10"
+                }`}
+              >
+                <span className="mr-2">{v.icon}</span>
+                {v.label}
+              </button>
+            ))}
           </div>
         </motion.div>
 
-        {/* Formulario Mejorado */}
+        {/* Formulario */}
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6 }}
-          className="max-w-4xl mx-auto mb-12"
+          transition={{ delay: 0.5 }}
+          className="max-w-4xl mx-auto mb-10"
         >
           <div className="bg-white/80 dark:bg-white/10 backdrop-blur-lg rounded-3xl p-8 shadow-2xl border border-gray-200 dark:border-white/20">
             <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-6 text-center">
-              Configuración OpenVPN
+              Datos del servidor
             </h2>
 
-            <form onSubmit={handleGenerateCommands} className="space-y-6">
+            <form onSubmit={handleGenerate} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 dark:text-green-200 mb-2">
-                    Nombre del Cliente:
-                  </label>
+                <Field label="Nombre del cliente VPN:">
                   <input
                     type="text"
                     value={clientName}
-                    onChange={(e) => setClientName(e.target.value)}
-                    className="w-full px-4 py-3 bg-white/50 dark:bg-white/5 border border-gray-300 dark:border-white/20 rounded-xl focus:ring-2 focus:ring-green-500 dark:text-white"
+                    onChange={(e) => setClientName(e.target.value.replace(/\s/g, ""))}
+                    className="input-vpn"
                     placeholder="Ej: usuario01"
                     required
                   />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 dark:text-green-200 mb-2">
-                    Contraseña (min. 8 chars):
-                  </label>
+                </Field>
+                <Field label="Contraseña del cliente (mín. 8):">
                   <input
-                    type="password"
+                    type="text"
                     value={clientPassword}
                     onChange={(e) => setClientPassword(e.target.value)}
-                    className="w-full px-4 py-3 bg-white/50 dark:bg-white/5 border border-gray-300 dark:border-white/20 rounded-xl focus:ring-2 focus:ring-green-500 dark:text-white"
-                    placeholder="Ej: MiClave123"
-                    minLength="8"
+                    className="input-vpn"
+                    placeholder="Ej: MiClave2024"
+                    minLength={8}
                     required
                   />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 dark:text-green-200 mb-2">
-                    Puerto OpenVPN:
-                  </label>
+                </Field>
+                <Field label="IP pública del servidor:">
+                  <input
+                    type="text"
+                    value={caCrlHost}
+                    onChange={(e) => setCaCrlHost(e.target.value)}
+                    className="input-vpn"
+                    placeholder="Ej: 181.188.203.190"
+                    required
+                  />
+                </Field>
+                <Field label="Puerto OpenVPN:">
                   <input
                     type="number"
                     value={port}
                     onChange={(e) => setPort(e.target.value)}
-                    className="w-full px-4 py-3 bg-white/50 dark:bg-white/5 border border-gray-300 dark:border-white/20 rounded-xl focus:ring-2 focus:ring-green-500 dark:text-white"
-                    placeholder="11977"
-                    min="1024"
+                    className="input-vpn"
+                    placeholder="1194"
+                    min="1"
                     max="65535"
                     required
                   />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 dark:text-green-200 mb-2">
-                    Protocolo:
-                  </label>
-                  {selectedVersion === "v6" ? (
+                </Field>
+                <Field label="Protocolo:">
+                  {isV6 ? (
                     <div className="w-full px-4 py-3 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-600 dark:text-gray-400">
-                      TCP (Único disponible en v6)
+                      TCP (único disponible en RouterOS 6)
                     </div>
                   ) : (
                     <select
                       value={protocol}
                       onChange={(e) => setProtocol(e.target.value)}
-                      className="w-full px-4 py-3 bg-white/50 dark:bg-white/5 border border-gray-300 dark:border-white/20 rounded-xl focus:ring-2 focus:ring-green-500 dark:text-white"
+                      className="input-vpn"
                     >
-                      <option value="udp">UDP (Recomendado)</option>
+                      <option value="udp">UDP (recomendado)</option>
                       <option value="tcp">TCP</option>
                     </select>
                   )}
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-semibold text-gray-700 dark:text-green-200 mb-2">
-                    Host CRL (IP Pública):
-                  </label>
-                  <input
-                    type="text"
-                    value={caCrlHost}
-                    onChange={(e) => setCaCrlHost(e.target.value)}
-                    className="w-full px-4 py-3 bg-white/50 dark:bg-white/5 border border-gray-300 dark:border-white/20 rounded-xl focus:ring-2 focus:ring-green-500 dark:text-white"
-                    placeholder="181.188.203.190"
-                    required
-                  />
-                </div>
+                </Field>
               </div>
 
-              {/* Información de Versión */}
-              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-700">
-                <div className="flex items-start">
-                  <div className="text-blue-500 text-lg mr-3">ℹ️</div>
-                  <div>
-                    <h4 className="font-semibold text-blue-800 dark:text-blue-300 mb-1">
-                      {selectedVersion === "v6"
-                        ? "RouterOS v6 (Legacy)"
-                        : selectedVersion === "v7"
-                        ? "RouterOS v7 (6.15-7.14)"
-                        : "RouterOS v7.15+"}
-                    </h4>
-                    <p className="text-blue-700 dark:text-blue-400 text-sm">
-                      {selectedVersion === "v6"
-                        ? "Versión legacy - Solo TCP, configuración extendida con todos los parámetros."
-                        : selectedVersion === "v7"
-                        ? "Versión intermedia - Protocolo configurable (UDP/TCP), sintaxis con 'set'."
-                        : "Versión moderna - Protocolo configurable (UDP/TCP), sintaxis con 'add'."}
-                    </p>
-                  </div>
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-700 flex items-start gap-3">
+                <span className="text-blue-500 text-lg">ℹ️</span>
+                <div>
+                  <h4 className="font-semibold text-blue-800 dark:text-blue-300">
+                    {versionInfo.label}
+                  </h4>
+                  <p className="text-blue-700 dark:text-blue-400 text-sm">
+                    {versionInfo.desc}
+                  </p>
                 </div>
               </div>
 
@@ -339,149 +242,66 @@ add certificate=server disabled=no name=ovpn-server1 port=${port} protocol=${pro
                 whileTap={{ scale: 0.98 }}
                 className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white py-4 px-6 rounded-xl font-bold text-lg shadow-lg transition-all duration-300"
               >
-                🚀 Generar Configuración
+                🚀 Generar script del servidor
               </motion.button>
             </form>
           </div>
         </motion.div>
 
-        {/* Comandos Generados */}
-        {showCommands && (
+        {/* Script generado */}
+        {showScript && (
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            className="max-w-4xl mx-auto space-y-8"
+            transition={{ duration: 0.6 }}
+            className="max-w-4xl mx-auto"
           >
-            {/* Servidor */}
             <div className="bg-white/80 dark:bg-white/10 backdrop-blur-lg rounded-3xl p-8 shadow-2xl border border-gray-200 dark:border-white/20">
-              <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-6 text-center">
-                Configuración del Servidor -{" "}
-                {selectedVersion === "v6"
-                  ? "v6 (Legacy)"
-                  : selectedVersion === "v7"
-                  ? "v7 (6.15-7.14)"
-                  : "v7.15+ (Moderno)"}
-              </h3>
-
-              <div className="space-y-6">
-                {[
-                  {
-                    title: "1. Certificados CA y Server",
-                    commands: caCommands,
-                  },
-                  {
-                    title: "2. Sellado de Certificados",
-                    commands: signCommands,
-                  },
-                  {
-                    title: "3. Marcado como Confiables",
-                    commands: trustCommands,
-                  },
-                  {
-                    title: "4. Servidor OpenVPN",
-                    commands: ovpnServerCommands,
-                    note:
-                      selectedVersion === "v6"
-                        ? "v6: Solo TCP, configuración extendida"
-                        : selectedVersion === "v7"
-                        ? "v7: Sintaxis con 'set', protocolo " +
-                          protocol.toUpperCase()
-                        : "v7.15+: Sintaxis con 'add', protocolo " +
-                          protocol.toUpperCase(),
-                  },
-                ].map((item, index) => (
-                  <motion.div
-                    key={index}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.1 }}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                <h3 className="text-2xl font-bold text-gray-800 dark:text-white">
+                  Script completo — {versionInfo.label}
+                </h3>
+                <div className="flex gap-3">
+                  <button
+                    onClick={copyAll}
+                    className={`text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                      copied
+                        ? "bg-emerald-600 hover:bg-emerald-600"
+                        : "bg-blue-600 hover:bg-blue-700"
+                    }`}
                   >
-                    <div className="flex items-center justify-between mb-3">
-                      <h4 className="font-semibold text-gray-700 dark:text-green-200">
-                        {item.title}
-                      </h4>
-                      {item.note && (
-                        <span className="text-xs bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 px-2 py-1 rounded">
-                          {item.note}
-                        </span>
-                      )}
-                    </div>
-                    <div className="relative">
-                      <pre className="bg-gray-800 text-green-400 p-6 rounded-xl overflow-x-auto text-sm border-2 border-gray-700">
-                        {item.commands}
-                      </pre>
-                      <button
-                        onClick={() => copyToClipboard(item.commands)}
-                        className="absolute top-3 right-3 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors duration-300"
-                      >
-                        📋 Copiar
-                      </button>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            </div>
-
-            {/* Cliente */}
-            <div className="bg-white/80 dark:bg-white/10 backdrop-blur-lg rounded-3xl p-8 shadow-2xl border border-gray-200 dark:border-white/20">
-              <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-6 text-center">
-                Cliente: <span className="text-green-500">{clientName}</span>
-              </h3>
-
-              <div className="space-y-6">
-                {[
-                  {
-                    title: "1. Certificado del Cliente",
-                    commands: clientCertCommands,
-                  },
-                  {
-                    title: "2. Sellado del Cliente",
-                    commands: signClientCommands,
-                  },
-                  { title: "3. Exportación", commands: exportCommands },
-                ].map((item, index) => (
-                  <motion.div
-                    key={index}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.1 }}
+                    {copied ? "✓ ¡Copiado!" : "📋 Copiar todo"}
+                  </button>
+                  <button
+                    onClick={downloadScript}
+                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
                   >
-                    <h4 className="font-semibold text-gray-700 dark:text-green-200 mb-3">
-                      {item.title}
-                    </h4>
-                    <div className="relative">
-                      <pre className="bg-gray-800 text-green-400 p-6 rounded-xl overflow-x-auto text-sm border-2 border-gray-700">
-                        {item.commands}
-                      </pre>
-                      <button
-                        onClick={() => copyToClipboard(item.commands)}
-                        className="absolute top-3 right-3 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors duration-300"
-                      >
-                        📋 Copiar
-                      </button>
-                    </div>
-                  </motion.div>
-                ))}
-
-                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-2xl p-6">
-                  <h4 className="font-semibold text-yellow-800 dark:text-yellow-200 mb-3 flex items-center">
-                    <span className="text-lg mr-2">📁</span>
-                    Archivos Exportados:
-                  </h4>
-                  <ul className="text-yellow-700 dark:text-yellow-300 space-y-1">
-                    <li>
-                      • <strong>ca.crt</strong> - Certificado de la CA
-                    </li>
-                    <li>
-                      • <strong>{clientName}.crt</strong> - Certificado del
-                      cliente
-                    </li>
-                    <li>
-                      • <strong>{clientName}.key</strong> - Llave privada
-                    </li>
-                  </ul>
+                    💾 Descargar .rsc
+                  </button>
                 </div>
+              </div>
+
+              <pre className="bg-gray-900 text-green-400 p-6 rounded-xl overflow-x-auto text-xs md:text-sm border-2 border-gray-700 leading-relaxed whitespace-pre">
+                {serverScript}
+              </pre>
+
+              <div className="mt-6 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-2xl p-6">
+                <h4 className="font-semibold text-yellow-800 dark:text-yellow-200 mb-3 flex items-center gap-2">
+                  <span className="text-lg">📁</span> Pasos finales
+                </h4>
+                <ol className="text-yellow-700 dark:text-yellow-300 space-y-1 text-sm list-decimal list-inside">
+                  <li>Pega el script en la <strong>New Terminal</strong> del MikroTik.</li>
+                  <li>Espera a que termine de firmar los certificados (1-2 min).</li>
+                  <li>
+                    Abre <strong>Files</strong> y descarga: <code>ca.crt</code>,{" "}
+                    <code>{clientName || "cliente1"}.crt</code> y{" "}
+                    <code>{clientName || "cliente1"}.key</code>.
+                  </li>
+                  <li>
+                    Ve a la pestaña <strong>Configurar</strong> y genera el archivo{" "}
+                    <code>.ovpn</code> con esos 3 archivos.
+                  </li>
+                </ol>
               </div>
             </div>
           </motion.div>
@@ -490,5 +310,14 @@ add certificate=server disabled=no name=ovpn-server1 port=${port} protocol=${pro
     </div>
   );
 };
+
+const Field = ({ label, children }) => (
+  <div>
+    <label className="block text-sm font-semibold text-gray-700 dark:text-green-200 mb-2">
+      {label}
+    </label>
+    {children}
+  </div>
+);
 
 export default CertificateSection;

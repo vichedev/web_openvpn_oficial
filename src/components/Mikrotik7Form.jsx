@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import Swal from "sweetalert2";
+import { generateOvpnFile, generateClientRouterScript } from "../utils/mikrotikGenerator";
 
 const Mikrotik7Form = () => {
   const [formData, setFormData] = useState({
@@ -9,8 +10,8 @@ const Mikrotik7Form = () => {
     password: "",
     port: "1194",
     proto: "TCP",
-    auth: "SHA1",
-    cipher: "AES-128-CBC",
+    auth: "SHA256",
+    cipher: "AES-256-GCM",
     caCert: null,
     clientCert: null,
     clientKey: null,
@@ -18,6 +19,7 @@ const Mikrotik7Form = () => {
 
   const [downloadUrl, setDownloadUrl] = useState("");
   const [showDownload, setShowDownload] = useState(false);
+  const [rscUrl, setRscUrl] = useState("");
 
   const showSuccessAlert = () => {
     Swal.fire({
@@ -41,8 +43,9 @@ const Mikrotik7Form = () => {
       icon: "success",
       iconColor: "#10B981",
       background: "#F9FAFB",
-      confirmButtonColor: "#10B981",
-      confirmButtonText: "¡Listo!",
+      showConfirmButton: false,
+      timer: 1800,
+      timerProgressBar: true,
       customClass: {
         popup: "rounded-2xl shadow-2xl",
         title: "text-2xl font-bold",
@@ -139,40 +142,38 @@ const Mikrotik7Form = () => {
       const clientCertText = await formData.clientCert.text();
       const clientKeyText = await formData.clientKey.text();
 
-      const outputOvpn = `client
-dev tun
-proto ${formData.proto.toLowerCase()}-client
-persist-key
-persist-tun
-tls-client
-remote-cert-tls server
-verb 4
-auth-nocache
-mute 10
-remote ${formData.remote}
-port ${formData.port}
-auth ${formData.auth}
-cipher ${formData.cipher}
-<auth-user-pass>
-${formData.username}
-${formData.password}
-</auth-user-pass>
-redirect-gateway def1
-<ca>
-${caCertText}
-</ca>
-<cert>
-${clientCertText}
-</cert>
-<key>
-${clientKeyText}
-</key>
-`;
+      const outputOvpn = generateOvpnFile({
+        version: 7,
+        remote: formData.remote,
+        port: formData.port,
+        proto: formData.proto,
+        username: formData.username,
+        password: formData.password,
+        auth: formData.auth,
+        cipher: formData.cipher,
+        caCert: caCertText,
+        clientCert: clientCertText,
+        clientKey: clientKeyText,
+      });
 
       const blob = new Blob([outputOvpn], { type: "text/plain" });
       const url = URL.createObjectURL(blob);
       setDownloadUrl(url);
+
+      // Script .rsc para usar otro MikroTik como cliente (site-to-site)
+      const rscText = generateClientRouterScript({
+        version: 7,
+        remote: formData.remote,
+        port: formData.port,
+        proto: formData.proto,
+        username: formData.username,
+        password: formData.password,
+        auth: formData.auth,
+        cipher: formData.cipher,
+      });
+
       setShowDownload(true);
+      setRscUrl(URL.createObjectURL(new Blob([rscText], { type: "text/plain" })));
 
       showSuccessAlert();
     } catch (error) {
@@ -318,9 +319,11 @@ ${clientKeyText}
                 value={formData.cipher}
                 onChange={handleInputChange}
                 options={[
-                  { value: "AES-128-CBC", label: "AES-128-CBC" },
-                  { value: "AES-192-CBC", label: "AES-192-CBC" },
+                  { value: "AES-256-GCM", label: "AES-256-GCM (recomendado)" },
+                  { value: "AES-128-GCM", label: "AES-128-GCM" },
                   { value: "AES-256-CBC", label: "AES-256-CBC" },
+                  { value: "AES-192-CBC", label: "AES-192-CBC" },
+                  { value: "AES-128-CBC", label: "AES-128-CBC" },
                 ]}
                 required
               />
@@ -373,17 +376,25 @@ ${clientKeyText}
                 animate={{ opacity: 1, scale: 1 }}
                 className="flex-1 max-w-md"
               >
-                <a
-                  href={downloadUrl}
-                  download={`${formData.username}_mikrotik7_config.ovpn`}
-                  className="group relative bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-bold py-4 px-8 rounded-xl shadow-lg transition-all duration-300 transform hover:scale-105 flex items-center justify-center w-full"
-                  onClick={handleDownload}
-                >
-                  <span className="relative z-10 flex items-center">
-                    📥 Descargar Configuración
-                  </span>
-                  <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
-                </a>
+                <div className="grid grid-cols-1 gap-3">
+                  <a
+                    href={downloadUrl}
+                    download={`${formData.username}_mikrotik7_config.ovpn`}
+                    className="group relative bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-all duration-300 transform hover:scale-105 flex items-center justify-center w-full"
+                    onClick={handleDownload}
+                  >
+                    <span className="relative z-10 flex items-center">📥 Descargar OVPN</span>
+                  </a>
+
+                  <a
+                    href={rscUrl}
+                    download={`${formData.username}_mikrotik7_router-cliente.rsc`}
+                    className="group relative bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-all duration-300 transform hover:scale-105 flex items-center justify-center w-full"
+                    title="Script para conectar otro MikroTik como cliente VPN (site-to-site)"
+                  >
+                    <span className="relative z-10 flex items-center">🛠️ Script Router Cliente (.rsc)</span>
+                  </a>
+                </div>
               </motion.div>
             )}
           </div>

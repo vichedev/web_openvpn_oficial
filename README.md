@@ -1,16 +1,60 @@
-# React + Vite
+# Web OpenVPN — Generador de VPN para MikroTik
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Aplicación web que hace **fácil crear una VPN OpenVPN en routers MikroTik**.
+Genera todo lo necesario en pocos clics: el script completo del servidor, el
+archivo `.ovpn` del cliente y el script para enlazar dos routers (site-to-site).
 
-Currently, two official plugins are available:
+## ¿Qué hace?
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+| Sección | Función |
+|---------|---------|
+| **Servidor** (`/certificados`) | Genera un único script `.rsc` que monta el servidor OpenVPN completo: certificados, pool de IP, perfil PPP, usuario, servidor OVPN, firewall y NAT. |
+| **Configurar** (`/configuracion`) | Genera el archivo `.ovpn` del cliente (con certificados embebidos) y un script `.rsc` para usar otro MikroTik como cliente. |
+| **Manual** (`/manual`) | Manual de usuario paso a paso, dentro de la propia web. |
 
-## React Compiler
+Compatible con **RouterOS 6**, **RouterOS 7 (6.15–7.14)** y **RouterOS 7.15+**.
 
-The React Compiler is currently not compatible with SWC. See [this issue](https://github.com/vitejs/vite-plugin-react/issues/428) for tracking the progress.
+## Cómo crear una VPN (resumen)
 
-## Expanding the ESLint configuration
+1. **Servidor** → completa los datos → genera y pega el script en el MikroTik.
+2. Descarga `ca.crt`, `NOMBRE.crt` y `NOMBRE.key` desde **Files** del router.
+3. **Configurar** → sube esos 3 archivos → descarga el `.ovpn`.
+4. Importa el `.ovpn` en la app OpenVPN del dispositivo.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Guía detallada en [MANUAL.md](MANUAL.md) o en la sección **Manual** de la web.
+
+## Desarrollo
+
+Proyecto **React 19 + Vite 7 + Tailwind CSS 4**.
+
+```bash
+npm install      # instalar dependencias
+npm run dev      # servidor de desarrollo
+npm run build    # build de producción
+npm run preview  # previsualizar el build
+npm run lint     # análisis estático
+```
+
+## Estructura
+
+```
+src/
+├── components/
+│   ├── CertificateSection.jsx  # sección "Servidor"
+│   ├── Mikrotik6Form.jsx       # formulario cliente RouterOS 6
+│   ├── Mikrotik7Form.jsx       # formulario cliente RouterOS 7
+│   ├── Configuracion.jsx       # pestañas de configuración del cliente
+│   ├── Manual.jsx              # manual de usuario
+│   └── ...
+└── utils/
+    └── mikrotikGenerator.js    # generadores: .ovpn, script servidor, script cliente-router
+```
+
+## Despliegue
+
+Incluye `Dockerfile`, `docker-compose.yml` y configuración de `nginx` para
+servir el build de producción.
+
+```bash
+docker compose up -d --build
+```
