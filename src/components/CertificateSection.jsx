@@ -103,52 +103,47 @@ const CertificateSection = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 pt-20 transition-colors duration-300">
-      <div className="absolute inset-0 overflow-hidden dark:block hidden">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-green-500/10 rounded-full blur-3xl"></div>
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-teal-500/5 rounded-full blur-3xl"></div>
-      </div>
-      <div className="absolute inset-0 overflow-hidden dark:hidden">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-green-100 rounded-full blur-3xl"></div>
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-emerald-100 rounded-full blur-3xl"></div>
+    <div className="page-bg pt-24 pb-20">
+      <div className="aurora">
+        <span className="aurora-blob b1" />
+        <span className="aurora-blob b2" />
+        <span className="aurora-blob b3" />
       </div>
 
-      <div className="container mx-auto px-4 py-12 relative z-10">
+      <div className="container mx-auto px-4 relative z-10">
         {/* Header */}
         <motion.div
-          initial={{ opacity: 0, y: 30 }}
+          initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8 }}
+          transition={{ duration: 0.7 }}
           className="text-center mb-12"
         >
-          <h1 className="text-4xl md:text-6xl font-bold text-gray-800 dark:text-white mb-6">
-            Servidor{" "}
-            <span className="text-transparent bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text">
-              OpenVPN
-            </span>
+          <span className="eyebrow mb-5">🖥️ Paso 1 · Servidor</span>
+          <h1 className="mt-5 text-4xl md:text-6xl font-extrabold tracking-tight text-slate-800 dark:text-white">
+            Tu MikroTik como <span className="text-gradient">servidor OpenVPN</span>
           </h1>
-          <p className="text-xl text-gray-600 dark:text-green-200 max-w-3xl mx-auto">
-            Genera el script completo que convierte tu MikroTik en servidor VPN:
-            certificados, usuario, firewall y NAT — todo en un solo paso.
+          <p className="mt-4 text-lg text-slate-600 dark:text-slate-300 max-w-2xl mx-auto">
+            Genera el script completo que lo configura todo: certificados,
+            usuario, firewall y NAT — en un solo paso.
           </p>
         </motion.div>
 
         {/* Selector de versión */}
         <motion.div
-          className="flex flex-wrap justify-center gap-2 mb-10"
-          initial={{ opacity: 0, y: 20 }}
+          className="flex justify-center mb-10"
+          initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
+          transition={{ delay: 0.2 }}
         >
-          <div className="bg-white/80 dark:bg-white/10 backdrop-blur-lg rounded-2xl p-2 shadow-2xl border border-gray-200 dark:border-white/20 flex flex-wrap gap-2 justify-center">
+          <div className="glass rounded-2xl p-1.5 flex gap-1.5">
             {VERSIONS.map((v) => (
               <button
                 key={v.id}
                 onClick={() => setSelectedVersion(v.id)}
-                className={`px-5 py-3 rounded-xl font-bold text-sm md:text-base transition-all duration-300 ${
+                className={`px-7 md:px-9 py-3.5 rounded-xl font-bold text-sm md:text-base transition-all duration-300 ${
                   selectedVersion === v.id
-                    ? "bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-lg"
-                    : "text-gray-600 dark:text-green-100 hover:bg-green-50 dark:hover:bg-white/10"
+                    ? "bg-gradient-to-r from-sky-500 to-cyan-500 text-white shadow-lg shadow-cyan-500/30"
+                    : "text-slate-600 dark:text-slate-300 hover:bg-sky-500/10"
                 }`}
               >
                 <span className="mr-2">{v.icon}</span>
@@ -160,13 +155,13 @@ const CertificateSection = () => {
 
         {/* Formulario */}
         <motion.div
-          initial={{ opacity: 0, y: 30 }}
+          initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
+          transition={{ delay: 0.35 }}
           className="max-w-4xl mx-auto mb-10"
         >
-          <div className="bg-white/80 dark:bg-white/10 backdrop-blur-lg rounded-3xl p-8 shadow-2xl border border-gray-200 dark:border-white/20">
-            <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-6 text-center">
+          <div className="glass glass-topline rounded-3xl p-8">
+            <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-6 text-center">
               Datos del servidor
             </h2>
 
@@ -249,7 +244,7 @@ const CertificateSection = () => {
                 type="submit"
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white py-4 px-6 rounded-xl font-bold text-lg shadow-lg transition-all duration-300"
+                className="w-full bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-600 hover:to-cyan-600 text-white py-4 px-6 rounded-xl font-bold text-lg shadow-lg shadow-cyan-500/30 transition-all duration-300"
               >
                 🚀 Generar script del servidor
               </motion.button>
@@ -265,32 +260,32 @@ const CertificateSection = () => {
             transition={{ duration: 0.6 }}
             className="max-w-4xl mx-auto"
           >
-            <div className="bg-white/80 dark:bg-white/10 backdrop-blur-lg rounded-3xl p-8 shadow-2xl border border-gray-200 dark:border-white/20">
+            <div className="glass glass-topline rounded-3xl p-8">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-                <h3 className="text-2xl font-bold text-gray-800 dark:text-white">
-                  Script completo — {versionInfo.label}
+                <h3 className="text-2xl font-bold text-slate-800 dark:text-white">
+                  Script completo · {versionInfo.label}
                 </h3>
                 <div className="flex gap-3">
                   <button
                     onClick={copyAll}
-                    className={`text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                    className={`text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
                       copied
-                        ? "bg-emerald-600 hover:bg-emerald-600"
-                        : "bg-blue-600 hover:bg-blue-700"
+                        ? "bg-emerald-500"
+                        : "bg-sky-600 hover:bg-sky-700 hover:-translate-y-0.5"
                     }`}
                   >
                     {copied ? "✓ ¡Copiado!" : "📋 Copiar todo"}
                   </button>
                   <button
                     onClick={downloadScript}
-                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all hover:-translate-y-0.5"
                   >
                     💾 Descargar .rsc
                   </button>
                 </div>
               </div>
 
-              <pre className="bg-gray-900 text-green-400 p-6 rounded-xl overflow-x-auto text-xs md:text-sm border-2 border-gray-700 leading-relaxed whitespace-pre">
+              <pre className="code-block p-6 overflow-x-auto text-xs md:text-sm leading-relaxed whitespace-pre">
                 {serverScript}
               </pre>
 
@@ -322,7 +317,7 @@ const CertificateSection = () => {
 
 const Field = ({ label, children }) => (
   <div>
-    <label className="block text-sm font-semibold text-gray-700 dark:text-green-200 mb-2">
+    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">
       {label}
     </label>
     {children}

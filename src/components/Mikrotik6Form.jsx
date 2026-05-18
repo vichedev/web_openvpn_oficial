@@ -214,13 +214,16 @@ const Mikrotik6Form = () => {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6 }}
-      className="bg-white/80 dark:bg-gray-800/50 backdrop-blur-lg rounded-3xl shadow-2xl border border-gray-200 dark:border-gray-600/30 overflow-hidden transition-colors duration-300"
+      className="glass rounded-3xl overflow-hidden"
     >
-      <div className="bg-gradient-to-r from-blue-600 to-cyan-500 p-6 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent transform -skew-x-12"></div>
+      <div className="bg-gradient-to-r from-sky-600 to-cyan-500 p-7 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-white/15 to-transparent -skew-x-12"></div>
         <h2 className="text-2xl font-bold text-white text-center relative z-10">
-          🚀 Configuración OVPN Mikrotik 6
+          📟 Configuración OVPN · MikroTik 6
         </h2>
+        <p className="text-center text-sky-100 text-sm mt-1 relative z-10">
+          RouterOS 6 · protocolo TCP
+        </p>
       </div>
 
       <form onSubmit={handleSubmit} className="p-6">
@@ -413,7 +416,7 @@ const FormField = ({
       required={required}
       min={min}
       max={max}
-      className="w-full px-4 py-3 bg-white dark:bg-gray-700/50 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all duration-300 text-gray-800 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 backdrop-blur-sm"
+      className="input-vpn"
     />
   </div>
 );
@@ -431,7 +434,7 @@ const SelectField = ({ id, label, value, onChange, options, required }) => (
       value={value}
       onChange={onChange}
       required={required}
-      className="w-full px-4 py-3 bg-white dark:bg-gray-700/50 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all duration-300 text-gray-800 dark:text-white backdrop-blur-sm"
+      className="input-vpn"
     >
       {options.map((option) => (
         <option
@@ -460,7 +463,7 @@ const FileField = ({ id, label, accept, onChange, required }) => (
       accept={accept}
       onChange={onChange}
       required={required}
-      className="w-full px-4 py-3 bg-white dark:bg-gray-700/50 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all duration-300 text-gray-800 dark:text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-cyan-500/20 file:text-cyan-700 dark:file:bg-cyan-500/30 dark:file:text-cyan-300 hover:file:bg-cyan-500/30 backdrop-blur-sm"
+      className="input-vpn cursor-pointer file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-sky-500/15 file:text-sky-700 dark:file:text-sky-300 file:cursor-pointer hover:file:bg-sky-500/25"
     />
   </div>
 );

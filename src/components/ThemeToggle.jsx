@@ -4,33 +4,23 @@ import { useTheme } from "../context/ThemeContext";
 const ThemeToggle = () => {
   const { isDarkMode, toggleTheme } = useTheme();
 
-  const handleClick = () => {
-    console.log(
-      "🎯 Botón clickeado - Tema actual:",
-      isDarkMode ? "oscuro" : "claro"
-    );
-    toggleTheme();
-  };
-
   return (
     <button
-      onClick={handleClick}
-      className={`relative w-14 h-8 rounded-full p-1 transition-all duration-300 ${
-        isDarkMode ? "bg-blue-600" : "bg-gray-300"
-      } shadow-lg hover:shadow-xl`}
+      onClick={toggleTheme}
+      className={`relative w-14 h-7 rounded-full p-0.5 transition-colors duration-300 border ${
+        isDarkMode
+          ? "bg-gradient-to-r from-indigo-600 to-sky-600 border-white/15"
+          : "bg-gradient-to-r from-sky-200 to-cyan-200 border-white/70"
+      }`}
       aria-label={isDarkMode ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
     >
-      <div
-        className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow-lg flex items-center justify-center transition-transform duration-300 ${
-          isDarkMode ? "transform translate-x-6" : "transform translate-x-0"
+      <span
+        className={`flex items-center justify-center w-6 h-6 bg-white rounded-full shadow-md text-xs transition-transform duration-300 ${
+          isDarkMode ? "translate-x-7" : "translate-x-0"
         }`}
       >
-        {isDarkMode ? (
-          <span className="text-blue-600 text-sm">🌙</span>
-        ) : (
-          <span className="text-yellow-500 text-sm">☀️</span>
-        )}
-      </div>
+        {isDarkMode ? "🌙" : "☀️"}
+      </span>
     </button>
   );
 };

@@ -216,13 +216,16 @@ const Mikrotik7Form = () => {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6 }}
-      className="bg-white/80 dark:bg-gray-800/50 backdrop-blur-lg rounded-3xl shadow-2xl border border-gray-200 dark:border-gray-600/30 overflow-hidden transition-colors duration-300"
+      className="glass rounded-3xl overflow-hidden"
     >
-      <div className="bg-gradient-to-r from-purple-600 to-pink-500 p-6 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent transform -skew-x-12"></div>
+      <div className="bg-gradient-to-r from-indigo-600 to-sky-500 p-7 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-white/15 to-transparent -skew-x-12"></div>
         <h2 className="text-2xl font-bold text-white text-center relative z-10">
-          ⚡ Configuración OVPN Mikrotik 7
+          🚀 Configuración OVPN · MikroTik 7
         </h2>
+        <p className="text-center text-indigo-100 text-sm mt-1 relative z-10">
+          RouterOS 7 · UDP/TCP · cifrado GCM
+        </p>
       </div>
 
       <form onSubmit={handleSubmit} className="p-6">
@@ -230,7 +233,7 @@ const Mikrotik7Form = () => {
           {/* Columna 1: Configuración básica */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4 flex items-center transition-colors duration-300">
-              <span className="w-2 h-2 bg-pink-500 rounded-full mr-2"></span>
+              <span className="w-2 h-2 bg-indigo-500 rounded-full mr-2"></span>
               Configuración Básica
             </h3>
 
@@ -294,7 +297,7 @@ const Mikrotik7Form = () => {
           {/* Columna 2: Seguridad y archivos */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4 flex items-center transition-colors duration-300">
-              <span className="w-2 h-2 bg-purple-500 rounded-full mr-2"></span>
+              <span className="w-2 h-2 bg-sky-500 rounded-full mr-2"></span>
               Seguridad y Certificados
             </h3>
 
@@ -362,7 +365,7 @@ const Mikrotik7Form = () => {
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
             <button
               type="submit"
-              className="group relative bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-bold py-4 px-8 rounded-xl shadow-lg transition-all duration-300 transform hover:scale-105 flex items-center min-w-[200px] justify-center"
+              className="group relative bg-gradient-to-r from-indigo-500 to-sky-500 hover:from-indigo-600 hover:to-sky-600 text-white font-bold py-4 px-8 rounded-xl shadow-lg transition-all duration-300 transform hover:scale-105 flex items-center min-w-[200px] justify-center"
             >
               <span className="relative z-10 flex items-center">
                 🚀 Generar OVPN
@@ -432,7 +435,7 @@ const FormField = ({
       required={required}
       min={min}
       max={max}
-      className="w-full px-4 py-3 bg-white dark:bg-gray-700/50 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-all duration-300 text-gray-800 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 backdrop-blur-sm"
+      className="input-vpn"
     />
   </div>
 );
@@ -450,7 +453,7 @@ const SelectField = ({ id, label, value, onChange, options, required }) => (
       value={value}
       onChange={onChange}
       required={required}
-      className="w-full px-4 py-3 bg-white dark:bg-gray-700/50 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-all duration-300 text-gray-800 dark:text-white backdrop-blur-sm"
+      className="input-vpn"
     >
       {options.map((option) => (
         <option
@@ -479,7 +482,7 @@ const FileField = ({ id, label, accept, onChange, required }) => (
       accept={accept}
       onChange={onChange}
       required={required}
-      className="w-full px-4 py-3 bg-white dark:bg-gray-700/50 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-all duration-300 text-gray-800 dark:text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-pink-500/20 file:text-pink-700 dark:file:bg-pink-500/30 dark:file:text-pink-300 hover:file:bg-pink-500/30 backdrop-blur-sm"
+      className="input-vpn cursor-pointer file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-500/15 file:text-indigo-700 dark:file:text-indigo-300 file:cursor-pointer hover:file:bg-indigo-500/25"
     />
   </div>
 );

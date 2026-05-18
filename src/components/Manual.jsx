@@ -121,23 +121,26 @@ const Manual = () => {
   const [openFaq, setOpenFaq] = useState(null);
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 pt-20 transition-colors duration-300">
-      <div className="container mx-auto px-4 py-12 max-w-4xl">
+    <div className="page-bg pt-24 pb-20">
+      <div className="aurora">
+        <span className="aurora-blob b1" />
+        <span className="aurora-blob b2" />
+        <span className="aurora-blob b3" />
+      </div>
+
+      <div className="container mx-auto px-4 max-w-4xl relative z-10">
         {/* Header */}
         <motion.div
-          initial={{ opacity: 0, y: 30 }}
+          initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8 }}
+          transition={{ duration: 0.7 }}
           className="text-center mb-12"
         >
-          <div className="text-5xl mb-4">📖</div>
-          <h1 className="text-4xl md:text-5xl font-bold text-gray-800 dark:text-white mb-4">
-            Manual de{" "}
-            <span className="text-transparent bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text">
-              usuario
-            </span>
+          <span className="eyebrow mb-5">📖 Guía completa</span>
+          <h1 className="mt-5 text-4xl md:text-6xl font-extrabold tracking-tight text-slate-800 dark:text-white">
+            Manual de <span className="text-gradient">usuario</span>
           </h1>
-          <p className="text-lg text-gray-600 dark:text-blue-200 max-w-2xl mx-auto">
+          <p className="mt-4 text-lg text-slate-600 dark:text-slate-300 max-w-2xl mx-auto">
             Cómo crear una VPN OpenVPN desde tu MikroTik, paso a paso.
           </p>
         </motion.div>
@@ -174,16 +177,18 @@ const Manual = () => {
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.1 * i }}
-              className="bg-white/80 dark:bg-white/10 backdrop-blur-lg rounded-2xl p-6 shadow-lg border border-gray-200 dark:border-white/20"
+              className="glass glass-hover rounded-2xl p-6"
             >
-              <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-3 flex items-center gap-3">
-                <span className="text-2xl">{step.icon}</span>
+              <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-3">
+                <span className="flex items-center justify-center w-11 h-11 rounded-xl bg-gradient-to-br from-sky-500 to-cyan-500 text-xl shadow-lg shadow-cyan-500/30">
+                  {step.icon}
+                </span>
                 {step.title}
               </h3>
               {step.body.map((p, j) => (
                 <p
                   key={j}
-                  className="text-gray-600 dark:text-blue-200 mb-2 leading-relaxed"
+                  className="text-slate-600 dark:text-slate-300 mb-2 leading-relaxed"
                 >
                   {p}
                 </p>
@@ -193,7 +198,7 @@ const Manual = () => {
                   {step.list.map((li, j) => (
                     <li
                       key={j}
-                      className="text-gray-600 dark:text-blue-200 text-sm flex gap-2"
+                      className="text-slate-600 dark:text-slate-300 text-sm flex gap-2"
                     >
                       <span className="text-cyan-500 font-bold">›</span>
                       <span>{li}</span>
@@ -217,26 +222,27 @@ const Manual = () => {
           transition={{ delay: 0.3 }}
           className="mt-12"
         >
-          <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-6 text-center">
+          <h2 className="text-2xl md:text-3xl font-extrabold text-slate-800 dark:text-white mb-6 text-center">
             🛠️ Solución de problemas
           </h2>
           <div className="space-y-3">
             {TROUBLESHOOT.map((item, i) => (
-              <div
-                key={i}
-                className="bg-white/80 dark:bg-white/10 backdrop-blur-lg rounded-xl border border-gray-200 dark:border-white/20 overflow-hidden"
-              >
+              <div key={i} className="glass rounded-xl overflow-hidden">
                 <button
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                  className="w-full flex items-center justify-between p-4 text-left font-semibold text-gray-800 dark:text-white"
+                  className="w-full flex items-center justify-between p-4 text-left font-semibold text-slate-800 dark:text-white hover:bg-sky-500/5 transition-colors"
                 >
                   <span>{item.q}</span>
-                  <span className="text-cyan-500 ml-3 text-xl">
-                    {openFaq === i ? "−" : "+"}
+                  <span
+                    className={`text-cyan-500 ml-3 text-xl transition-transform duration-300 ${
+                      openFaq === i ? "rotate-45" : ""
+                    }`}
+                  >
+                    +
                   </span>
                 </button>
                 {openFaq === i && (
-                  <div className="px-4 pb-4 text-gray-600 dark:text-blue-200 text-sm">
+                  <div className="px-4 pb-4 text-slate-600 dark:text-slate-300 text-sm animate-fadeIn">
                     {item.a}
                   </div>
                 )}
@@ -254,14 +260,11 @@ const Manual = () => {
         >
           <Link
             to="/certificados"
-            className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold py-3 px-6 rounded-xl text-center shadow-lg transition-all"
+            className="bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-600 hover:to-cyan-600 text-white font-bold py-3.5 px-7 rounded-xl text-center shadow-lg shadow-cyan-500/30 transition-all hover:-translate-y-0.5"
           >
             🖥️ Empezar: crear el servidor
           </Link>
-          <Link
-            to="/configuracion"
-            className="bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-bold py-3 px-6 rounded-xl text-center shadow-lg transition-all"
-          >
+          <Link to="/configuracion" className="btn-ghost py-3.5 px-7">
             ⚙️ Generar archivo .ovpn
           </Link>
         </motion.div>

@@ -82,8 +82,8 @@ const Hero = () => {
         this.speedX = (Math.random() - 0.5) * 0.6;
         this.speedY = (Math.random() - 0.5) * 0.6;
         this.color = isDarkMode
-          ? `rgba(249, 115, 22, ${Math.random() * 0.7 + 0.3})`
-          : `rgba(234, 88, 12, ${Math.random() * 0.6 + 0.4})`;
+          ? `rgba(56, 189, 248, ${Math.random() * 0.7 + 0.3})`
+          : `rgba(14, 165, 233, ${Math.random() * 0.55 + 0.35})`;
         this.oscillation = Math.random() * Math.PI * 2;
         this.oscillationSpeed = Math.random() * 0.02 + 0.01;
       }
@@ -139,8 +139,8 @@ const Hero = () => {
 
       // Conexiones entre partículas
       ctx.strokeStyle = isDarkMode
-        ? "rgba(249, 115, 22, 0.2)"
-        : "rgba(234, 88, 12, 0.15)";
+        ? "rgba(56, 189, 248, 0.22)"
+        : "rgba(14, 165, 233, 0.16)";
       ctx.lineWidth = 0.7;
 
       for (let i = 0; i < particles.length; i++) {
@@ -190,13 +190,7 @@ const Hero = () => {
   };
 
   return (
-    <div
-      className={`min-h-screen transition-colors duration-1000 ${
-        isDarkMode
-          ? "bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900"
-          : "bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100"
-      }`}
-    >
+    <div className="page-bg min-h-screen">
       <canvas ref={canvasRef} className="absolute inset-0 z-0" />
 
       <AnimatePresence mode="wait">
@@ -327,234 +321,92 @@ const LogoAnimation = ({ stage, isMobile, isDarkMode }) => (
   </motion.div>
 );
 
-const HeroContent = ({ onConfigurarClick, isDarkMode }) => {
-  const [windowWidth, setWindowWidth] = useState(
-    typeof window !== "undefined" ? window.innerWidth : 1200
-  );
+const fadeUp = (delay = 0) => ({
+  initial: { opacity: 0, y: 24 },
+  animate: { opacity: 1, y: 0 },
+  transition: { delay, duration: 0.7, ease: "easeOut" },
+});
 
-  useEffect(() => {
-    const handleResize = () => setWindowWidth(window.innerWidth);
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
-
-  const getLogoSize = () => {
-    if (windowWidth < 640) return { width: 120, height: 120 };
-    if (windowWidth < 768) return { width: 140, height: 140 };
-    if (windowWidth < 1024) return { width: 160, height: 160 };
-    return { width: 180, height: 180 };
-  };
-
-  const logoSize = getLogoSize();
+const HeroContent = ({ onConfigurarClick }) => {
+  const navigate = useNavigate();
 
   return (
-    <section className="min-h-screen flex items-center justify-center pt-30 pb-8">
+    <section className="min-h-screen flex items-center justify-center pt-28 pb-16">
       <div className="container mx-auto px-4 text-center">
-        {/* Título principal - AHORA PRIMERO */}
-        <motion.h1
-          className="font-bold mb-6 leading-tight transition-colors duration-1000"
-          style={{ color: isDarkMode ? "#ffffff" : "#1f2937" }}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{
-            delay: 0.2,
-            duration: 0.8,
-            ease: "easeOut",
-          }}
-        >
-          <span
-            className={`block ${
-              windowWidth < 640
-                ? "text-2xl"
-                : windowWidth < 768
-                ? "text-3xl"
-                : windowWidth < 1024
-                ? "text-4xl"
-                : "text-5xl"
-            }`}
-          >
-            Conecta de forma segura tu red utilizando{" "}
+        {/* Etiqueta */}
+        <motion.div {...fadeUp(0.1)} className="flex justify-center mb-7">
+          <span className="eyebrow">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            Compatible con RouterOS 6 y 7
           </span>
-          <span
-            className={`block bg-gradient-to-r from-blue-500 to-blue-600 bg-clip-text text-transparent ${
-              windowWidth < 640
-                ? "text-2xl"
-                : windowWidth < 768
-                ? "text-3xl"
-                : windowWidth < 1024
-                ? "text-4xl"
-                : "text-5xl"
-            } font-bold mt-2`}
-          >
-            OpenVPN en Mikrotik
-          </span>
-        </motion.h1>
-
-        {/* Logo en el contenido principal - AHORA DESPUÉS DEL TÍTULO */}
-        <motion.div
-          className="mx-auto mb-6 md:mb-8"
-          initial={{ scale: 0, opacity: 0, y: -30 }}
-          animate={{ scale: 1, opacity: 1, y: 0 }}
-          transition={{
-            delay: 0.4,
-            type: "spring",
-            stiffness: 100,
-            damping: 15,
-            duration: 1.2,
-          }}
-        >
-          <motion.img
-            src="/img/logo.png"
-            alt="OpenVPN"
-            className="mx-auto object-contain"
-            style={{
-              width:
-                windowWidth < 640
-                  ? "140px"
-                  : windowWidth < 768
-                  ? "160px"
-                  : windowWidth < 1024
-                  ? "180px"
-                  : "200px",
-              height:
-                windowWidth < 640
-                  ? "50px"
-                  : windowWidth < 768
-                  ? "60px"
-                  : windowWidth < 1024
-                  ? "70px"
-                  : "80px",
-              maxWidth: "100%",
-            }}
-            whileHover={{
-              scale: 1.05,
-              transition: { duration: 0.3 },
-            }}
-          />
         </motion.div>
+
+        {/* Logo */}
+        <motion.img
+          src="/img/logo.png"
+          alt="OpenVPN"
+          className="mx-auto object-contain w-44 md:w-56 mb-8 floating-img drop-shadow-[0_8px_30px_rgba(14,165,233,0.35)]"
+          initial={{ scale: 0.6, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.2, type: "spring", stiffness: 90, damping: 14 }}
+        />
+
+        {/* Título */}
+        <motion.h1
+          {...fadeUp(0.3)}
+          className="font-extrabold leading-[1.1] tracking-tight text-slate-800 dark:text-white text-3xl md:text-5xl lg:text-6xl mb-6"
+        >
+          Conecta tu red de forma segura con
+          <span className="block text-gradient mt-2">OpenVPN en MikroTik</span>
+        </motion.h1>
 
         {/* Descripción */}
         <motion.p
-          className={`mb-8 max-w-3xl mx-auto leading-relaxed transition-colors duration-1000 ${
-            windowWidth < 640 ? "text-base" : "text-lg md:text-xl"
-          }`}
-          style={{ color: isDarkMode ? "#bfdbfe" : "#4b5563" }}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{
-            delay: 0.6,
-            duration: 0.8,
-            ease: "easeOut",
-          }}
+          {...fadeUp(0.45)}
+          className="mb-9 max-w-2xl mx-auto text-base md:text-xl leading-relaxed text-slate-600 dark:text-slate-300"
         >
-          Configuración automática y segura para tus dispositivos Mikrotik.
-          Genera archivos de configuración .ovpn en segundos.
+          Crea el servidor, genera los certificados y descarga tu archivo{" "}
+          <span className="font-semibold text-sky-600 dark:text-cyan-300">.ovpn</span>{" "}
+          en minutos. Sin comandos complicados.
         </motion.p>
 
-        {/* Botón CTA */}
+        {/* CTAs */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{
-            delay: 0.8,
-            duration: 0.8,
-            ease: "easeOut",
-          }}
-          className="mb-12 md:mb-16"
+          {...fadeUp(0.6)}
+          className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-16"
         >
-          <motion.button
-            onClick={onConfigurarClick}
-            className="group relative px-6 py-3 md:px-8 md:py-4 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold shadow-2xl overflow-hidden"
-            whileHover={{
-              scale: 1.05,
-              transition: { duration: 0.3 },
-            }}
-            whileTap={{ scale: 0.98 }}
-          >
-            <span
-              className={`relative z-10 flex items-center justify-center ${
-                windowWidth < 640 ? "text-base" : "text-lg"
-              }`}
-            >
-              Configurar aquí!
-              <motion.svg
-                className="w-4 h-4 md:w-5 md:h-5 ml-2"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                initial={{ x: 0 }}
-                whileHover={{ x: 5 }}
-                transition={{ duration: 0.3 }}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M13 7l5 5m0 0l-5 5m5-5H6"
-                />
-              </motion.svg>
-            </span>
-            <motion.div
-              className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent transform -skew-x-12 -translate-x-full"
-              whileHover={{ translateX: "400%" }}
-              transition={{ duration: 0.8, ease: "easeInOut" }}
-            />
-          </motion.button>
+          <button onClick={onConfigurarClick} className="btn-vpn text-lg">
+            🚀 Crear mi VPN
+            <span className="transition-transform group-hover:translate-x-1">→</span>
+          </button>
+          <button onClick={() => navigate("/manual")} className="btn-ghost text-lg">
+            📖 Ver el manual
+          </button>
         </motion.div>
 
-        {/* Características */}
+        {/* Tarjetas de características */}
         <motion.div
-          className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 max-w-4xl mx-auto"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{
-            delay: 1.0,
-            duration: 0.8,
-            ease: "easeOut",
-          }}
+          {...fadeUp(0.75)}
+          className="grid grid-cols-1 md:grid-cols-3 gap-5 max-w-4xl mx-auto"
         >
           {[
-            { icon: "⚡", title: "Rápido", desc: "Configuración en segundos" },
-            { icon: "🛡️", title: "Seguro", desc: "Encriptación avanzada" },
-            { icon: "🔧", title: "Fácil", desc: "Interfaz intuitiva" },
-          ].map((feature, index) => (
+            { icon: "⚡", title: "Rápido", desc: "VPN lista en pocos minutos, sin configuraciones manuales." },
+            { icon: "🛡️", title: "Seguro", desc: "Certificados y cifrado AES con autenticación TLS." },
+            { icon: "🧩", title: "Sencillo", desc: "Copia, pega y descarga. La web hace el trabajo difícil." },
+          ].map((f, i) => (
             <motion.div
-              key={index}
-              className={`backdrop-blur-md border rounded-xl p-4 md:p-6 transition-all duration-500 ${
-                isDarkMode
-                  ? "bg-white/10 border-white/20 text-white hover:border-blue-400/50"
-                  : "bg-white/80 border-gray-200 text-gray-800 hover:border-blue-400/50"
-              }`}
-              whileHover={{
-                scale: 1.03,
-                y: -5,
-                transition: { duration: 0.3 },
-              }}
+              key={f.title}
+              className="glass glass-hover rounded-2xl p-6 text-left"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 1.2 + index * 0.1 }}
+              transition={{ delay: 0.9 + i * 0.12 }}
             >
-              <div
-                className={`${
-                  windowWidth < 640 ? "text-2xl" : "text-3xl"
-                } mb-2 md:mb-3`}
-              >
-                {feature.icon}
-              </div>
-              <h3
-                className={`font-semibold mb-1 md:mb-2 ${
-                  windowWidth < 640 ? "text-lg" : "text-xl"
-                }`}
-              >
-                {feature.title}
+              <div className="text-3xl mb-3">{f.icon}</div>
+              <h3 className="font-bold text-lg text-slate-800 dark:text-white mb-1.5">
+                {f.title}
               </h3>
-              <p
-                className={`
-          ${isDarkMode ? "text-blue-200" : "text-gray-600"} 
-          ${windowWidth < 640 ? "text-sm" : "text-base"}
-        `}
-              >
-                {feature.desc}
+              <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                {f.desc}
               </p>
             </motion.div>
           ))}

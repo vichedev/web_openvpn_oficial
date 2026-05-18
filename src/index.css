@@ -1,115 +1,319 @@
-/* En tu archivo App.css */
-
 @import "tailwindcss";
 
-/* * Esto le dice a Tailwind 4 que aplique las variantes dark:
- * cuando la clase .dark esté presente en el HTML.
-*/
+/* Tailwind 4: activar variante dark con la clase .dark */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Eliminar scroll horizontal global */
+/* ===================================================================== */
+/*  BASE                                                                  */
+/* ===================================================================== */
 html,
 body {
     overflow-x: hidden;
     max-width: 100%;
 }
 
-/* Campo de formulario reutilizable (sección Servidor / Configurar) */
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    background-color: #eef4ff;
+}
+
+.dark body {
+    background-color: #070b16;
+}
+
+/* ===================================================================== */
+/*  SISTEMA DE DISEÑO — GLASSMORPHISM                                     */
+/* ===================================================================== */
+
+/* Fondo de página con "aurora" (degradados radiales suaves) */
+.page-bg {
+    position: relative;
+    min-height: 100vh;
+    background:
+        radial-gradient(900px circle at 12% 6%, rgba(56, 189, 248, 0.20), transparent 45%),
+        radial-gradient(820px circle at 88% 10%, rgba(59, 130, 246, 0.18), transparent 45%),
+        radial-gradient(900px circle at 50% 108%, rgba(14, 165, 233, 0.14), transparent 50%),
+        linear-gradient(180deg, #f3f6fb 0%, #eef4ff 45%, #ecfbff 100%);
+    transition: background 0.4s ease;
+}
+
+.dark .page-bg {
+    background:
+        radial-gradient(900px circle at 12% 6%, rgba(56, 189, 248, 0.16), transparent 45%),
+        radial-gradient(820px circle at 88% 10%, rgba(99, 102, 241, 0.18), transparent 45%),
+        radial-gradient(900px circle at 50% 108%, rgba(14, 165, 233, 0.12), transparent 50%),
+        linear-gradient(180deg, #070b16 0%, #0a1224 55%, #060912 100%);
+}
+
+/* Blobs flotantes decorativos */
+.aurora {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.aurora-blob {
+    position: absolute;
+    border-radius: 9999px;
+    filter: blur(90px);
+    opacity: 0.55;
+    animation: floaty 14s ease-in-out infinite;
+}
+
+.dark .aurora-blob {
+    opacity: 0.4;
+}
+
+.aurora-blob.b1 { width: 26rem; height: 26rem; top: -8rem; left: -6rem; background: #38bdf8; }
+.aurora-blob.b2 { width: 24rem; height: 24rem; top: 20%; right: -8rem; background: #6366f1; animation-delay: -4s; }
+.aurora-blob.b3 { width: 22rem; height: 22rem; bottom: -8rem; left: 30%; background: #22d3ee; animation-delay: -8s; }
+
+@keyframes floaty {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33%      { transform: translate(2.5rem, -1.8rem) scale(1.08); }
+    66%      { transform: translate(-1.8rem, 1.6rem) scale(0.95); }
+}
+
+/* Tarjeta de vidrio esmerilado — el componente estrella */
+.glass {
+    background: rgba(255, 255, 255, 0.70);
+    backdrop-filter: blur(22px) saturate(165%);
+    -webkit-backdrop-filter: blur(22px) saturate(165%);
+    border: 1px solid rgba(255, 255, 255, 0.75);
+    box-shadow:
+        0 24px 60px -28px rgba(2, 8, 23, 0.32),
+        inset 0 1px 0 rgba(255, 255, 255, 0.65);
+}
+
+.dark .glass {
+    background: rgba(255, 255, 255, 0.045);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    box-shadow:
+        0 28px 70px -30px rgba(0, 0, 0, 0.75),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* Panel interior más sutil */
+.glass-soft {
+    background: rgba(255, 255, 255, 0.55);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+}
+
+.dark .glass-soft {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Efecto de elevación al pasar el cursor */
+.glass-hover {
+    transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.2, 1),
+        box-shadow 0.35s ease, border-color 0.35s ease;
+}
+
+.glass-hover:hover {
+    transform: translateY(-6px);
+    border-color: rgba(56, 189, 248, 0.55);
+    box-shadow: 0 34px 80px -28px rgba(14, 165, 233, 0.45);
+}
+
+/* Borde superior luminoso (línea de acento) */
+.glass-topline {
+    position: relative;
+}
+
+.glass-topline::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 12%;
+    right: 12%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.9), transparent);
+}
+
+/* Texto con degradado */
+.text-gradient {
+    background: linear-gradient(110deg, #0ea5e9, #38bdf8 45%, #6366f1);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+/* Etiqueta pequeña tipo "pill" */
+.eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.35rem 0.9rem;
+    border-radius: 9999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    color: #0369a1;
+    background: rgba(56, 189, 248, 0.12);
+    border: 1px solid rgba(56, 189, 248, 0.30);
+}
+
+.dark .eyebrow {
+    color: #7dd3fc;
+    background: rgba(56, 189, 248, 0.10);
+    border-color: rgba(56, 189, 248, 0.25);
+}
+
+/* Botón primario con degradado */
+.btn-vpn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.95rem 1.9rem;
+    border-radius: 0.9rem;
+    font-weight: 700;
+    color: #fff;
+    background: linear-gradient(120deg, #0284c7, #0ea5e9 50%, #38bdf8);
+    box-shadow: 0 14px 30px -10px rgba(14, 165, 233, 0.6);
+    transition: transform 0.25s ease, box-shadow 0.25s ease, filter 0.25s ease;
+}
+
+.btn-vpn:hover {
+    transform: translateY(-2px);
+    filter: brightness(1.07);
+    box-shadow: 0 20px 40px -12px rgba(14, 165, 233, 0.7);
+}
+
+.btn-vpn:active {
+    transform: translateY(0);
+}
+
+/* Botón secundario (vidrio) */
+.btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.9rem 1.6rem;
+    border-radius: 0.9rem;
+    font-weight: 600;
+    color: #0f172a;
+    background: rgba(255, 255, 255, 0.6);
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    transition: transform 0.25s ease, border-color 0.25s ease, background 0.25s ease;
+}
+
+.btn-ghost:hover {
+    transform: translateY(-2px);
+    border-color: rgba(56, 189, 248, 0.6);
+}
+
+.dark .btn-ghost {
+    color: #e2e8f0;
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.14);
+}
+
+/* Campo de formulario reutilizable */
 .input-vpn {
     width: 100%;
-    padding: 0.75rem 1rem;
-    border-radius: 0.75rem;
-    border: 1px solid #d1d5db;
-    background-color: rgba(255, 255, 255, 0.6);
-    color: #1f2937;
-    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+    padding: 0.8rem 1rem;
+    border-radius: 0.8rem;
+    border: 1px solid rgba(15, 23, 42, 0.14);
+    background-color: rgba(255, 255, 255, 0.75);
+    color: #0f172a;
+    font-size: 0.95rem;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.input-vpn::placeholder {
+    color: #94a3b8;
 }
 
 .input-vpn:focus {
     outline: none;
-    border-color: #22c55e;
-    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.4);
+    border-color: #38bdf8;
+    background-color: #fff;
+    box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.18);
 }
 
 .dark .input-vpn {
-    border-color: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.14);
     background-color: rgba(255, 255, 255, 0.05);
-    color: #ffffff;
+    color: #f1f5f9;
 }
 
-/* Scroll vertical personalizado en tonos naranja suave */
+.dark .input-vpn:focus {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Bloque de código / terminal */
+.code-block {
+    background: #0b1120;
+    color: #7ee7c7;
+    border: 1px solid rgba(56, 189, 248, 0.22);
+    border-radius: 1rem;
+    box-shadow: inset 0 2px 18px rgba(0, 0, 0, 0.5);
+}
+
+/* Animación de entrada */
+@keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fadeIn {
+    animation: fadeUp 0.5s ease both;
+}
+
+.floating-img {
+    animation: floaty 7s ease-in-out infinite;
+}
+
+/* ===================================================================== */
+/*  SCROLLBAR — tonos cian/azul acordes a la marca                        */
+/* ===================================================================== */
 ::-webkit-scrollbar {
     width: 10px;
 }
 
 ::-webkit-scrollbar-track {
-    background: #fff7ed;
-    /* orange-50 */
+    background: #e0f2fe;
     border-radius: 8px;
 }
 
 ::-webkit-scrollbar-thumb {
-    background: linear-gradient(135deg, #fed7aa, #fdba74);
-    /* orange-200 a orange-300 */
+    background: linear-gradient(135deg, #7dd3fc, #38bdf8);
     border-radius: 8px;
-    border: 2px solid #fff7ed;
-    transition: all 0.3s ease;
+    border: 2px solid #e0f2fe;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(135deg, #fdba74, #fb923c);
-    /* orange-300 a orange-400 */
-    transform: scale(1.05);
+    background: linear-gradient(135deg, #38bdf8, #0ea5e9);
 }
 
-::-webkit-scrollbar-thumb:active {
-    background: linear-gradient(135deg, #f97316, #ea580c);
-    /* orange-500 a orange-600 */
-}
-
-/* Para modo oscuro */
 .dark ::-webkit-scrollbar-track {
-    background: #431407;
-    /* orange-950 */
+    background: #0a1224;
 }
 
 .dark ::-webkit-scrollbar-thumb {
-    background: linear-gradient(135deg, #fb923c, #ea580c);
-    /* orange-400 a orange-600 */
-    border: 2px solid #431407;
+    background: linear-gradient(135deg, #0ea5e9, #6366f1);
+    border: 2px solid #0a1224;
 }
 
-.dark ::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(135deg, #f97316, #dc2626);
-    /* orange-500 a red-600 */
-}
-
-.dark ::-webkit-scrollbar-thumb:active {
-    background: linear-gradient(135deg, #ea580c, #b91c1c);
-    /* orange-600 a red-700 */
-}
-
-/* Para Firefox */
 * {
     scrollbar-width: thin;
-    scrollbar-color: #fdba74 #fff7ed;
+    scrollbar-color: #38bdf8 #e0f2fe;
 }
 
 .dark * {
-    scrollbar-color: #fb923c #431407;
-}
-
-/* Suavizar el scroll en todos los navegadores */
-html {
-    scroll-behavior: smooth;
-}
-
-/* Estilo adicional para contenedores con scroll interno */
-.scroll-container {
-    scrollbar-width: thin;
-    scrollbar-color: #fed7aa #fff7ed;
-}
-
-.dark .scroll-container {
-    scrollbar-color: #fb923c #431407;
+    scrollbar-color: #0ea5e9 #0a1224;
 }

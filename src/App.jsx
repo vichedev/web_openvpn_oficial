@@ -15,7 +15,7 @@ function App() {
   return (
     <ThemeProvider>
       <Router>
-        <div className="App min-h-screen flex flex-col bg-white dark:bg-gray-900">
+        <div className="App min-h-screen flex flex-col">
           <Nav />
           <main className="flex-grow">
             <Routes>
