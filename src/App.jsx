@@ -1,6 +1,7 @@
 import React from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "./context/ThemeContext";
+import { SessionProvider } from "./context/SessionContext";
 import Nav from "./components/Nav";
 import Hero from "./components/Hero";
 import Configuracion from "./components/Configuracion";
@@ -14,25 +15,27 @@ import "./App.css";
 function App() {
   return (
     <ThemeProvider>
-      <Router>
-        <div className="App min-h-screen flex flex-col">
-          <Nav />
-          <main className="flex-grow">
-            <Routes>
-              <Route path="/" element={<Hero />} />
-              <Route path="/configuracion" element={<Configuracion />} />
-              <Route path="/caracteristicas" element={<Features />} />
-              <Route path="/descargas" element={<Downloads />} />
-              <Route
-                path="/certificados"
-                element={<CertificateSection />}
-              />
-              <Route path="/manual" element={<Manual />} />
-            </Routes>
-          </main>
-          <Footer />
-        </div>
-      </Router>
+      <SessionProvider>
+        <Router>
+          <div className="App min-h-screen flex flex-col">
+            <Nav />
+            <main className="flex-grow">
+              <Routes>
+                <Route path="/" element={<Hero />} />
+                <Route path="/configuracion" element={<Configuracion />} />
+                <Route path="/caracteristicas" element={<Features />} />
+                <Route path="/descargas" element={<Downloads />} />
+                <Route
+                  path="/certificados"
+                  element={<CertificateSection />}
+                />
+                <Route path="/manual" element={<Manual />} />
+              </Routes>
+            </main>
+            <Footer />
+          </div>
+        </Router>
+      </SessionProvider>
     </ThemeProvider>
   );
 }

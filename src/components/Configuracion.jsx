@@ -2,9 +2,15 @@ import React, { useState } from "react";
 import { motion } from "framer-motion";
 import Mikrotik6Form from "./Mikrotik6Form";
 import Mikrotik7Form from "./Mikrotik7Form";
+import { useSession } from "../context/SessionContext";
 
 const Configuracion = () => {
-  const [activeTab, setActiveTab] = useState("mikrotik6");
+  const { session } = useSession();
+  // Abrimos por defecto la pestaña que coincide con la versión elegida en el
+  // servidor (v6 -> MikroTik 6, v7 -> MikroTik 7).
+  const [activeTab, setActiveTab] = useState(
+    session.routerVersion === "v6" ? "mikrotik6" : "mikrotik7"
+  );
 
   return (
     <div className="page-bg pt-24 pb-20">

@@ -1,15 +1,20 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import Swal from "sweetalert2";
-import { generateOvpnFile, generateClientRouterScript } from "../utils/mikrotikGenerator";
+import { generateOvpnFile } from "../utils/mikrotikGenerator";
+import { useSession } from "../context/SessionContext";
 
 const Mikrotik7Form = () => {
+  const { session } = useSession();
+
+  // Precargamos los campos con los datos de la sesión (los que se rellenaron al
+  // crear el servidor): IP pública, usuario, contraseña, puerto y protocolo.
   const [formData, setFormData] = useState({
-    remote: "",
-    username: "",
-    password: "",
-    port: "1194",
-    proto: "TCP",
+    remote: session.publicIp || "",
+    username: session.clientName || "",
+    password: session.clientPassword || "",
+    port: session.port || "1194",
+    proto: (session.protocol || "udp").toUpperCase(),
     auth: "SHA256",
     cipher: "AES-256-GCM",
     caCert: null,
@@ -19,7 +24,6 @@ const Mikrotik7Form = () => {
 
   const [downloadUrl, setDownloadUrl] = useState("");
   const [showDownload, setShowDownload] = useState(false);
-  const [rscUrl, setRscUrl] = useState("");
 
   const showSuccessAlert = () => {
     Swal.fire({
@@ -160,20 +164,7 @@ const Mikrotik7Form = () => {
       const url = URL.createObjectURL(blob);
       setDownloadUrl(url);
 
-      // Script .rsc para usar otro MikroTik como cliente (site-to-site)
-      const rscText = generateClientRouterScript({
-        version: 7,
-        remote: formData.remote,
-        port: formData.port,
-        proto: formData.proto,
-        username: formData.username,
-        password: formData.password,
-        auth: formData.auth,
-        cipher: formData.cipher,
-      });
-
       setShowDownload(true);
-      setRscUrl(URL.createObjectURL(new Blob([rscText], { type: "text/plain" })));
 
       showSuccessAlert();
     } catch (error) {
@@ -195,9 +186,9 @@ const Mikrotik7Form = () => {
         username: "",
         password: "",
         port: "1194",
-        proto: "TCP",
-        auth: "SHA1",
-        cipher: "AES-128-CBC",
+        proto: "UDP",
+        auth: "SHA256",
+        cipher: "AES-256-GCM",
         caCert: null,
         clientCert: null,
         clientKey: null,
@@ -245,6 +236,7 @@ const Mikrotik7Form = () => {
               value={formData.remote}
               onChange={handleInputChange}
               required
+              hint="IP pública o dominio del MikroTik servidor (la misma que pusiste al generar el script del servidor). Es el destino al que se conecta el cliente."
             />
 
             <FormField
@@ -255,6 +247,7 @@ const Mikrotik7Form = () => {
               value={formData.username}
               onChange={handleInputChange}
               required
+              hint="Nombre del usuario VPN creado en el servidor (/ppp secret). Debe coincidir exactamente con el del script del servidor."
             />
 
             <FormField
@@ -265,6 +258,7 @@ const Mikrotik7Form = () => {
               value={formData.password}
               onChange={handleInputChange}
               required
+              hint="Contraseña de ese usuario VPN. Debe ser idéntica a la definida en el servidor."
             />
 
             <div className="grid grid-cols-2 gap-4">
@@ -278,6 +272,7 @@ const Mikrotik7Form = () => {
                 min="1"
                 max="65535"
                 required
+                hint="Mismo puerto del servidor (por defecto 1194)."
               />
 
               <SelectField
@@ -286,10 +281,11 @@ const Mikrotik7Form = () => {
                 value={formData.proto}
                 onChange={handleInputChange}
                 options={[
-                  { value: "TCP", label: "TCP" },
                   { value: "UDP", label: "UDP" },
+                  { value: "TCP", label: "TCP" },
                 ]}
                 required
+                hint="El mismo que elegiste en el servidor. UDP es lo recomendado."
               />
             </div>
           </div>
@@ -308,12 +304,12 @@ const Mikrotik7Form = () => {
                 value={formData.auth}
                 onChange={handleInputChange}
                 options={[
+                  { value: "SHA256", label: "SHA-256 (recomendado)" },
                   { value: "SHA1", label: "SHA-1" },
                   { value: "MD5", label: "MD5" },
-                  { value: "SHA256", label: "SHA-256" },
-                  { value: "None", label: "None" },
                 ]}
                 required
+                hint="Algoritmo de autenticación HMAC. SHA-256 es lo recomendado en RouterOS 7."
               />
 
               <SelectField
@@ -329,6 +325,7 @@ const Mikrotik7Form = () => {
                   { value: "AES-128-CBC", label: "AES-128-CBC" },
                 ]}
                 required
+                hint="Algoritmo de cifrado de los datos. GCM es más rápido y seguro (recomendado en RouterOS 7)."
               />
             </div>
 
@@ -339,6 +336,7 @@ const Mikrotik7Form = () => {
                 accept=".crt,.cer"
                 onChange={handleFileChange}
                 required
+                hint="Archivo ca.crt descargado desde Files del MikroTik servidor."
               />
 
               <FileField
@@ -347,6 +345,7 @@ const Mikrotik7Form = () => {
                 accept=".crt,.cer"
                 onChange={handleFileChange}
                 required
+                hint="Archivo NOMBRE.crt del cliente (ej: usuario01.crt), exportado por el script del servidor."
               />
 
               <FileField
@@ -355,6 +354,7 @@ const Mikrotik7Form = () => {
                 accept=".key"
                 onChange={handleFileChange}
                 required
+                hint="Archivo NOMBRE.key del cliente. Va cifrado con la contraseña del cliente; OpenVPN la pedirá al conectar."
               />
             </div>
           </div>
@@ -388,15 +388,6 @@ const Mikrotik7Form = () => {
                   >
                     <span className="relative z-10 flex items-center">📥 Descargar OVPN</span>
                   </a>
-
-                  <a
-                    href={rscUrl}
-                    download={`${formData.username}_mikrotik7_router-cliente.rsc`}
-                    className="group relative bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-all duration-300 transform hover:scale-105 flex items-center justify-center w-full"
-                    title="Script para conectar otro MikroTik como cliente VPN (site-to-site)"
-                  >
-                    <span className="relative z-10 flex items-center">🛠️ Script Router Cliente (.rsc)</span>
-                  </a>
                 </div>
               </motion.div>
             )}
@@ -408,6 +399,11 @@ const Mikrotik7Form = () => {
 };
 
 // Componentes auxiliares reutilizables
+const Hint = ({ children }) =>
+  children ? (
+    <p className="text-xs text-gray-500 dark:text-gray-400 leading-snug">{children}</p>
+  ) : null;
+
 const FormField = ({
   id,
   label,
@@ -418,6 +414,7 @@ const FormField = ({
   required,
   min,
   max,
+  hint,
 }) => (
   <div className="flex flex-col space-y-2">
     <label
@@ -437,10 +434,11 @@ const FormField = ({
       max={max}
       className="input-vpn"
     />
+    <Hint>{hint}</Hint>
   </div>
 );
 
-const SelectField = ({ id, label, value, onChange, options, required }) => (
+const SelectField = ({ id, label, value, onChange, options, required, hint }) => (
   <div className="flex flex-col space-y-2">
     <label
       htmlFor={id}
@@ -465,10 +463,11 @@ const SelectField = ({ id, label, value, onChange, options, required }) => (
         </option>
       ))}
     </select>
+    <Hint>{hint}</Hint>
   </div>
 );
 
-const FileField = ({ id, label, accept, onChange, required }) => (
+const FileField = ({ id, label, accept, onChange, required, hint }) => (
   <div className="flex flex-col space-y-2">
     <label
       htmlFor={id}
@@ -484,6 +483,7 @@ const FileField = ({ id, label, accept, onChange, required }) => (
       required={required}
       className="input-vpn cursor-pointer file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-500/15 file:text-indigo-700 dark:file:text-indigo-300 file:cursor-pointer hover:file:bg-indigo-500/25"
     />
+    <Hint>{hint}</Hint>
   </div>
 );
 

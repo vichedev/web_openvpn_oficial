@@ -1,14 +1,18 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import Swal from "sweetalert2";
-import { generateOvpnFile, generateClientRouterScript } from "../utils/mikrotikGenerator";
+import { generateOvpnFile } from "../utils/mikrotikGenerator";
+import { useSession } from "../context/SessionContext";
 
 const Mikrotik6Form = () => {
+  const { session } = useSession();
+
+  // Precargamos los campos con los datos de la sesión creada en el servidor.
   const [formData, setFormData] = useState({
-    remote: "",
-    username: "",
-    password: "",
-    port: "1194",
+    remote: session.publicIp || "",
+    username: session.clientName || "",
+    password: session.clientPassword || "",
+    port: session.port || "1194",
     auth: "SHA1",
     cipher: "AES-128-CBC",
     caCert: null,
@@ -18,7 +22,6 @@ const Mikrotik6Form = () => {
 
   const [downloadUrl, setDownloadUrl] = useState("");
   const [showDownload, setShowDownload] = useState(false);
-  const [rscUrl, setRscUrl] = useState("");
 
   const showSuccessAlert = () => {
     Swal.fire({
@@ -159,20 +162,7 @@ const Mikrotik6Form = () => {
       const url = URL.createObjectURL(blob);
       setDownloadUrl(url);
 
-      // Script .rsc para usar otro MikroTik como cliente (site-to-site)
-      const rscText = generateClientRouterScript({
-        version: 6,
-        remote: formData.remote,
-        port: formData.port,
-        proto: "tcp",
-        username: formData.username,
-        password: formData.password,
-        auth: formData.auth,
-        cipher: formData.cipher,
-      });
-
       setShowDownload(true);
-      setRscUrl(URL.createObjectURL(new Blob([rscText], { type: "text/plain" })));
 
       showSuccessAlert();
     } catch (error) {
@@ -243,6 +233,7 @@ const Mikrotik6Form = () => {
               value={formData.remote}
               onChange={handleInputChange}
               required
+              hint="IP pública o dominio del MikroTik servidor (la misma que pusiste al generar el script del servidor)."
             />
 
             <FormField
@@ -253,6 +244,7 @@ const Mikrotik6Form = () => {
               value={formData.username}
               onChange={handleInputChange}
               required
+              hint="Nombre del usuario VPN creado en el servidor (/ppp secret). Debe coincidir exactamente."
             />
 
             <FormField
@@ -263,6 +255,7 @@ const Mikrotik6Form = () => {
               value={formData.password}
               onChange={handleInputChange}
               required
+              hint="Contraseña de ese usuario VPN. Idéntica a la del servidor."
             />
 
             <div className="grid grid-cols-2 gap-4">
@@ -276,6 +269,7 @@ const Mikrotik6Form = () => {
                 min="1"
                 max="65535"
                 required
+                hint="Mismo puerto del servidor (por defecto 1194)."
               />
 
               <SelectField
@@ -286,9 +280,9 @@ const Mikrotik6Form = () => {
                 options={[
                   { value: "SHA1", label: "SHA-1" },
                   { value: "MD5", label: "MD5" },
-                  { value: "None", label: "None" },
                 ]}
                 required
+                hint="Algoritmo de autenticación. En RouterOS 6 lo habitual es SHA-1."
               />
             </div>
           </div>
@@ -311,6 +305,7 @@ const Mikrotik6Form = () => {
                 { value: "AES-256-CBC", label: "AES-256-CBC" },
               ]}
               required
+              hint="RouterOS 6 solo admite cifrados CBC (sin GCM). AES-256-CBC es el más seguro."
             />
 
             <div className="space-y-3">
@@ -320,6 +315,7 @@ const Mikrotik6Form = () => {
                 accept=".crt,.cer"
                 onChange={handleFileChange}
                 required
+                hint="Archivo ca.crt descargado desde Files del MikroTik servidor."
               />
 
               <FileField
@@ -328,6 +324,7 @@ const Mikrotik6Form = () => {
                 accept=".crt,.cer"
                 onChange={handleFileChange}
                 required
+                hint="Archivo NOMBRE.crt del cliente (ej: usuario01.crt)."
               />
 
               <FileField
@@ -336,6 +333,7 @@ const Mikrotik6Form = () => {
                 accept=".key"
                 onChange={handleFileChange}
                 required
+                hint="Archivo NOMBRE.key del cliente. Va cifrado con la contraseña del cliente; OpenVPN la pedirá al conectar."
               />
             </div>
           </div>
@@ -369,15 +367,6 @@ const Mikrotik6Form = () => {
                   >
                     <span className="relative z-10 flex items-center">📥 Descargar OVPN</span>
                   </a>
-
-                  <a
-                    href={rscUrl}
-                    download={`${formData.username}_mikrotik6_router-cliente.rsc`}
-                    className="group relative bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-all duration-300 transform hover:scale-105 flex items-center justify-center w-full"
-                    title="Script para conectar otro MikroTik como cliente VPN (site-to-site)"
-                  >
-                    <span className="relative z-10 flex items-center">🛠️ Script Router Cliente (.rsc)</span>
-                  </a>
                 </div>
               </motion.div>
             )}
@@ -389,6 +378,11 @@ const Mikrotik6Form = () => {
 };
 
 // Componentes auxiliares reutilizables
+const Hint = ({ children }) =>
+  children ? (
+    <p className="text-xs text-gray-500 dark:text-gray-400 leading-snug">{children}</p>
+  ) : null;
+
 const FormField = ({
   id,
   label,
@@ -399,6 +393,7 @@ const FormField = ({
   required,
   min,
   max,
+  hint,
 }) => (
   <div className="flex flex-col space-y-2">
     <label
@@ -418,10 +413,11 @@ const FormField = ({
       max={max}
       className="input-vpn"
     />
+    <Hint>{hint}</Hint>
   </div>
 );
 
-const SelectField = ({ id, label, value, onChange, options, required }) => (
+const SelectField = ({ id, label, value, onChange, options, required, hint }) => (
   <div className="flex flex-col space-y-2">
     <label
       htmlFor={id}
@@ -446,10 +442,11 @@ const SelectField = ({ id, label, value, onChange, options, required }) => (
         </option>
       ))}
     </select>
+    <Hint>{hint}</Hint>
   </div>
 );
 
-const FileField = ({ id, label, accept, onChange, required }) => (
+const FileField = ({ id, label, accept, onChange, required, hint }) => (
   <div className="flex flex-col space-y-2">
     <label
       htmlFor={id}
@@ -465,6 +462,7 @@ const FileField = ({ id, label, accept, onChange, required }) => (
       required={required}
       className="input-vpn cursor-pointer file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-sky-500/15 file:text-sky-700 dark:file:text-sky-300 file:cursor-pointer hover:file:bg-sky-500/25"
     />
+    <Hint>{hint}</Hint>
   </div>
 );
 

@@ -1,9 +1,14 @@
 // 📁 src/components/CertificateSection.jsx
 // Genera el script .rsc COMPLETO para convertir un MikroTik en servidor OpenVPN.
 import React, { useState, useMemo } from "react";
+import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import Swal from "sweetalert2";
-import { generateServerScript } from "../utils/mikrotikGenerator";
+import { generateServerScript, deriveVpnNetwork, VPN_DEFAULTS } from "../utils/mikrotikGenerator";
+import { useSession } from "../context/SessionContext";
+
+// Patrón de una red en notación CIDR válida (ej. 10.10.10.0/24).
+const CIDR_RE = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}$/;
 
 const VERSIONS = [
   {
@@ -21,31 +26,79 @@ const VERSIONS = [
 ];
 
 const CertificateSection = () => {
-  const [selectedVersion, setSelectedVersion] = useState("v7");
-  const [clientName, setClientName] = useState("");
-  const [clientPassword, setClientPassword] = useState("");
-  const [caCrlHost, setCaCrlHost] = useState("");
-  const [port, setPort] = useState("1194");
-  const [protocol, setProtocol] = useState("udp");
+  // Todos los datos del servidor viven en la SESIÓN, para que se autocompleten
+  // en la pestaña del cliente y para poder "terminar la sesión" y empezar otra.
+  const { session, updateSession, markCredentialsCreated, endSession } = useSession();
+  const {
+    routerVersion: selectedVersion,
+    clientName,
+    clientPassword,
+    publicIp: caCrlHost,
+    port,
+    protocol,
+    vpnNetwork,
+    localAddress,
+    poolRange,
+    dns,
+    credentialsCreated,
+  } = session;
+
   const [showScript, setShowScript] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // Setters que escriben directamente en la sesión.
+  const setSelectedVersion = (v) => updateSession({ routerVersion: v });
+  const setClientName = (v) => updateSession({ clientName: v });
+  const setClientPassword = (v) => updateSession({ clientPassword: v });
+  const setCaCrlHost = (v) => updateSession({ publicIp: v });
+  const setPort = (v) => updateSession({ port: v });
+  const setProtocol = (v) => updateSession({ protocol: v });
+  const setLocalAddress = (v) => updateSession({ localAddress: v });
+  const setPoolRange = (v) => updateSession({ poolRange: v });
+  const setDns = (v) => updateSession({ dns: v });
 
   const versionInfo = VERSIONS.find((v) => v.id === selectedVersion);
   const isV6 = selectedVersion === "v6";
 
+  // Al escribir una red CIDR válida, autocompletamos gateway y pool (editables después).
+  const handleNetworkChange = (value) => {
+    if (CIDR_RE.test(value.trim())) {
+      const d = deriveVpnNetwork(value);
+      updateSession({ vpnNetwork: value, localAddress: d.localAddress, poolRange: d.poolRange });
+    } else {
+      updateSession({ vpnNetwork: value });
+    }
+  };
+
   // El script se recalcula automaticamente cuando cambia cualquier dato.
-  const serverScript = useMemo(
-    () =>
-      generateServerScript({
-        routerVersion: selectedVersion,
-        publicIp: caCrlHost || "<IP_PUBLICA_DEL_SERVIDOR>",
-        port: port || "1194",
-        proto: isV6 ? "tcp" : protocol,
-        clientName: clientName || "cliente1",
-        clientPassword: clientPassword || "<CLAVE_DEL_CLIENTE>",
-      }),
-    [selectedVersion, caCrlHost, port, protocol, clientName, clientPassword, isV6]
-  );
+  const serverScript = useMemo(() => {
+    const net = deriveVpnNetwork(vpnNetwork);
+    return generateServerScript({
+      routerVersion: selectedVersion,
+      publicIp: caCrlHost || "<IP_PUBLICA_DEL_SERVIDOR>",
+      port: port || "1194",
+      proto: isV6 ? "tcp" : protocol,
+      clientName: clientName || "cliente1",
+      clientPassword: clientPassword || "<CLAVE_DEL_CLIENTE>",
+      network: net.network,
+      netmask: net.netmask,
+      localAddress: localAddress || net.localAddress,
+      poolRange: poolRange || net.poolRange,
+      dns: dns || VPN_DEFAULTS.dns,
+    });
+  }, [
+    selectedVersion,
+    caCrlHost,
+    port,
+    protocol,
+    clientName,
+    clientPassword,
+    isV6,
+    vpnNetwork,
+    localAddress,
+    poolRange,
+    dns,
+  ]);
 
   const showErrorAlert = (text) =>
     Swal.fire({
@@ -67,18 +120,49 @@ const CertificateSection = () => {
     if (!caCrlHost.trim())
       return showErrorAlert("Indica la IP pública del servidor MikroTik.");
     if (!port) return showErrorAlert("Indica el puerto de OpenVPN.");
+    if (!CIDR_RE.test(vpnNetwork.trim()))
+      return showErrorAlert(
+        "La red VPN debe ir en formato CIDR, por ejemplo: 10.10.10.0/24"
+      );
+    if (!localAddress.trim())
+      return showErrorAlert("Indica la IP del gateway de la VPN (local-address).");
+    if (!poolRange.trim())
+      return showErrorAlert("Indica el rango del pool de IPs para los clientes.");
 
     setShowScript(true);
+    // Las credenciales ya están creadas: la sesión pasa a su fase final.
+    markCredentialsCreated();
     Swal.fire({
-      title: "¡Script generado! 🎉",
-      text: `El script completo del servidor para ${clientName} está listo abajo.`,
+      title: "¡Credenciales creadas! 🎉",
+      html: `
+        <p style="margin-bottom:8px">El script completo del servidor para <strong>${clientName}</strong> está listo abajo.</p>
+        <p style="font-size:0.9em;color:#475569">Tus datos (IP, usuario, contraseña y puerto) ya están cargados en la pestaña <strong>Cliente</strong>.</p>
+      `,
       icon: "success",
       iconColor: "#10B981",
       background: "#F9FAFB",
       showConfirmButton: false,
-      timer: 1600,
+      timer: 2200,
       timerProgressBar: true,
       customClass: { popup: "rounded-2xl shadow-2xl", title: "text-xl font-bold" },
+    });
+  };
+
+  // Termina la sesión actual y deja todo en blanco para una nueva configuración.
+  const handleEndSession = () => {
+    endSession();
+    setShowScript(false);
+    setCopied(false);
+    Swal.fire({
+      title: "Sesión finalizada 👋",
+      text: "Puedes empezar una nueva configuración desde cero.",
+      icon: "success",
+      iconColor: "#0EA5E9",
+      background: "#F9FAFB",
+      showConfirmButton: false,
+      timer: 1600,
+      timerProgressBar: true,
+      customClass: { popup: "rounded-2xl shadow-xl" },
     });
   };
 
@@ -128,6 +212,34 @@ const CertificateSection = () => {
           </p>
         </motion.div>
 
+        {/* Banner de sesión activa */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+          className="max-w-4xl mx-auto mb-8"
+        >
+          <div className="glass rounded-2xl px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-emerald-300/40 dark:border-emerald-500/30">
+            <div className="flex items-center gap-3">
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500" />
+              </span>
+              <p className="text-sm text-slate-700 dark:text-slate-200">
+                <strong>Sesión activa.</strong> Lo que escribas aquí (IP, usuario,
+                contraseña y puerto) se autocompletará en la pestaña{" "}
+                <strong>Cliente</strong>.
+              </p>
+            </div>
+            <button
+              onClick={handleEndSession}
+              className="text-xs font-semibold text-slate-500 dark:text-slate-300 hover:text-rose-500 transition-colors whitespace-nowrap"
+            >
+              ↺ Reiniciar sesión
+            </button>
+          </div>
+        </motion.div>
+
         {/* Selector de versión */}
         <motion.div
           className="flex justify-center mb-10"
@@ -167,7 +279,10 @@ const CertificateSection = () => {
 
             <form onSubmit={handleGenerate} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Field label="Nombre del cliente VPN:">
+                <Field
+                  label="Nombre del cliente VPN:"
+                  hint="Nombre del usuario que se conectará (sin espacios). Se usa como nombre del certificado y del usuario PPP. Ej: usuario01."
+                >
                   <input
                     type="text"
                     value={clientName}
@@ -177,7 +292,10 @@ const CertificateSection = () => {
                     required
                   />
                 </Field>
-                <Field label="Contraseña del cliente (mín. 8):">
+                <Field
+                  label="Contraseña del cliente (mín. 8):"
+                  hint="Clave del usuario VPN. También cifra la llave .key exportada, así que la pedirá OpenVPN al conectar. Mínimo 8 caracteres."
+                >
                   <input
                     type="text"
                     value={clientPassword}
@@ -188,7 +306,10 @@ const CertificateSection = () => {
                     required
                   />
                 </Field>
-                <Field label="IP pública del servidor:">
+                <Field
+                  label="IP pública del servidor:"
+                  hint="IP pública (WAN) o dominio del MikroTik por donde llegan los clientes. Es la que pondrás como 'remote' en el .ovpn. Ej: 181.188.203.190."
+                >
                   <input
                     type="text"
                     value={caCrlHost}
@@ -198,7 +319,10 @@ const CertificateSection = () => {
                     required
                   />
                 </Field>
-                <Field label="Puerto OpenVPN:">
+                <Field
+                  label="Puerto OpenVPN:"
+                  hint="Puerto donde escucha el servidor. El estándar es 1194. Debe estar abierto en el firewall y NAT del MikroTik (el script lo abre)."
+                >
                   <input
                     type="number"
                     value={port}
@@ -210,7 +334,14 @@ const CertificateSection = () => {
                     required
                   />
                 </Field>
-                <Field label="Protocolo:">
+                <Field
+                  label="Protocolo:"
+                  hint={
+                    isV6
+                      ? "RouterOS 6 solo soporta TCP en OpenVPN."
+                      : "UDP es más rápido (recomendado). Usa TCP solo si UDP está bloqueado en la red."
+                  }
+                >
                   {isV6 ? (
                     <div className="w-full px-4 py-3 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-600 dark:text-gray-400">
                       TCP (único disponible en RouterOS 6)
@@ -226,6 +357,72 @@ const CertificateSection = () => {
                     </select>
                   )}
                 </Field>
+              </div>
+
+              {/* --- Red de la VPN: el usuario define el pool de IPs --- */}
+              <div className="pt-2">
+                <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-1">
+                  <span className="w-2 h-2 bg-cyan-500 rounded-full" />
+                  Red de la VPN (pool de IPs)
+                </h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+                  Define el rango privado que usarán tus clientes. Escribe la red y se
+                  autocompletan el gateway y el pool; puedes ajustarlos a tu gusto.
+                  No debe chocar con la red LAN de tu MikroTik.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Field
+                    label="Red VPN (CIDR):"
+                    hint="Subred privada para la VPN, en formato red/máscara. Lo normal es un /24. Ej: 10.10.10.0/24 o 10.8.0.0/24."
+                  >
+                    <input
+                      type="text"
+                      value={vpnNetwork}
+                      onChange={(e) => handleNetworkChange(e.target.value)}
+                      className="input-vpn"
+                      placeholder="Ej: 10.10.10.0/24"
+                      required
+                    />
+                  </Field>
+                  <Field
+                    label="Gateway VPN (local-address):"
+                    hint="IP del propio MikroTik dentro de la VPN. Suele ser la primera de la red (.1) y NO debe estar dentro del pool. Ej: 10.10.10.1."
+                  >
+                    <input
+                      type="text"
+                      value={localAddress}
+                      onChange={(e) => setLocalAddress(e.target.value)}
+                      className="input-vpn"
+                      placeholder="Ej: 10.10.10.1"
+                      required
+                    />
+                  </Field>
+                  <Field
+                    label="Pool de IPs para clientes:"
+                    hint="Rango de IPs que se reparten a los clientes (inicio-fin). No incluyas el gateway. Ej: 10.10.10.10-10.10.10.254."
+                  >
+                    <input
+                      type="text"
+                      value={poolRange}
+                      onChange={(e) => setPoolRange(e.target.value)}
+                      className="input-vpn"
+                      placeholder="Ej: 10.10.10.10-10.10.10.254"
+                      required
+                    />
+                  </Field>
+                  <Field
+                    label="DNS para los clientes:"
+                    hint="Servidores DNS que recibirán los clientes al conectar, separados por coma. Ej: 8.8.8.8,1.1.1.1."
+                  >
+                    <input
+                      type="text"
+                      value={dns}
+                      onChange={(e) => setDns(e.target.value)}
+                      className="input-vpn"
+                      placeholder="Ej: 8.8.8.8,1.1.1.1"
+                    />
+                  </Field>
+                </div>
               </div>
 
               <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-700 flex items-start gap-3">
@@ -302,11 +499,46 @@ const CertificateSection = () => {
                     <code>{clientName || "cliente1"}.key</code>.
                   </li>
                   <li>
-                    Ve a la pestaña <strong>Configurar</strong> y genera el archivo{" "}
-                    <code>.ovpn</code> con esos 3 archivos.
+                    Ve a la pestaña <strong>Cliente</strong> (ya tiene tus datos
+                    cargados) y genera el archivo <code>.ovpn</code> con esos 3
+                    archivos.
                   </li>
                 </ol>
               </div>
+
+              {/* Credenciales creadas -> opción de terminar sesión */}
+              {credentialsCreated && (
+                <motion.div
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5 }}
+                  className="mt-6 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-300 dark:border-emerald-600 rounded-2xl p-6 text-center"
+                >
+                  <div className="text-3xl mb-2">✅</div>
+                  <h4 className="text-lg font-bold text-emerald-800 dark:text-emerald-200 mb-1">
+                    Tus credenciales fueron creadas
+                  </h4>
+                  <p className="text-sm text-emerald-700 dark:text-emerald-300 mb-5">
+                    Tus datos ya están cargados en la pestaña <strong>Cliente</strong>.
+                    Cuando termines, puedes cerrar esta sesión y empezar una nueva
+                    configuración desde cero.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                    <Link
+                      to="/configuracion"
+                      className="bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-600 hover:to-cyan-600 text-white px-6 py-3 rounded-xl font-bold text-sm shadow-lg shadow-cyan-500/30 transition-all"
+                    >
+                      ⚙️ Ir a generar el .ovpn (Cliente)
+                    </Link>
+                    <button
+                      onClick={handleEndSession}
+                      className="bg-rose-500 hover:bg-rose-600 text-white px-6 py-3 rounded-xl font-bold text-sm shadow-lg shadow-rose-500/30 transition-all"
+                    >
+                      🔚 Terminar sesión y empezar una nueva
+                    </button>
+                  </div>
+                </motion.div>
+              )}
             </div>
           </motion.div>
         )}
@@ -315,12 +547,17 @@ const CertificateSection = () => {
   );
 };
 
-const Field = ({ label, children }) => (
+const Field = ({ label, hint, children }) => (
   <div>
     <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">
       {label}
     </label>
     {children}
+    {hint && (
+      <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400 leading-snug">
+        {hint}
+      </p>
+    )}
   </div>
 );
 
