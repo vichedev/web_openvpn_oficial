@@ -5,7 +5,7 @@ import { generateOvpnFile } from "../utils/mikrotikGenerator";
 import { useSession } from "../context/SessionContext";
 
 const Mikrotik7Form = () => {
-  const { session } = useSession();
+  const { session, endSession } = useSession();
 
   // Precargamos los campos con los datos de la sesión (los que se rellenaron al
   // crear el servidor): IP pública, usuario, contraseña, puerto y protocolo.
@@ -16,7 +16,9 @@ const Mikrotik7Form = () => {
     port: session.port || "1194",
     proto: (session.protocol || "udp").toUpperCase(),
     auth: "SHA256",
-    cipher: "AES-256-GCM",
+    // CBC por defecto: RouterOS 7.17+ tiene un bug con AES-256-GCM que rompe el
+    // handshake ("cipher final failed"). CBC funciona en TCP y UDP de forma fiable.
+    cipher: "AES-256-CBC",
     caCert: null,
     clientCert: null,
     clientKey: null,
@@ -27,33 +29,15 @@ const Mikrotik7Form = () => {
 
   const showSuccessAlert = () => {
     Swal.fire({
-      title: "¡Archivo OVPN Generado! 🎉",
-      html: `
-        <div class="text-left">
-          <p class="text-gray-700 mb-4">
-            La configuración para <strong>${formData.username}</strong> se ha generado exitosamente.
-          </p>
-          <div class="bg-green-50 border border-green-200 rounded-lg p-4">
-            <h4 class="font-semibold text-green-800 mb-2">📋 Configuración:</h4>
-            <ul class="text-green-700 text-sm space-y-1">
-              <li>• Servidor: <strong>${formData.remote}</strong></li>
-              <li>• Puerto: <strong>${formData.port}</strong></li>
-              <li>• Protocolo: <strong>${formData.proto}</strong></li>
-              <li>• Cifrado: <strong>${formData.cipher}</strong></li>
-            </ul>
-          </div>
-        </div>
-      `,
       icon: "success",
-      iconColor: "#10B981",
-      background: "#F9FAFB",
+      title: `OVPN listo para ${formData.username}`,
+      text: "Descárgalo con el botón verde. La sesión sigue activa.",
+      toast: true,
+      position: "top-end",
       showConfirmButton: false,
-      timer: 1800,
+      timer: 3000,
       timerProgressBar: true,
-      customClass: {
-        popup: "rounded-2xl shadow-2xl",
-        title: "text-2xl font-bold",
-      },
+      background: "#F9FAFB",
     });
   };
 
@@ -102,18 +86,15 @@ const Mikrotik7Form = () => {
 
   const showDownloadSuccessAlert = () => {
     Swal.fire({
-      title: "📥 ¡Descarga Exitosa!",
-      text: "La configuración OVPN se ha descargado correctamente",
       icon: "success",
-      iconColor: "#3B82F6",
-      background: "#F9FAFB",
-      confirmButtonColor: "#3B82F6",
-      confirmButtonText: "OK",
-      timer: 2000,
+      title: "Descarga iniciada",
+      text: "Cuando termines, pulsa 'Terminar sesión' para empezar otra.",
+      toast: true,
+      position: "top-end",
+      showConfirmButton: false,
+      timer: 2500,
       timerProgressBar: true,
-      customClass: {
-        popup: "rounded-2xl shadow-xl",
-      },
+      background: "#F9FAFB",
     });
   };
 
@@ -158,6 +139,9 @@ const Mikrotik7Form = () => {
         caCert: caCertText,
         clientCert: clientCertText,
         clientKey: clientKeyText,
+        // DNS que usara el cliente al tunelizar todo el trafico (el servidor
+        // MikroTik no envia DNS por su cuenta). Viene de la sesion del servidor.
+        dns: session.dns || undefined,
       });
 
       const blob = new Blob([outputOvpn], { type: "text/plain" });
@@ -176,30 +160,44 @@ const Mikrotik7Form = () => {
   };
 
   const handleDownload = () => {
+    // Solo confirmamos la descarga con un toast discreto.
+    // NO reseteamos nada: la sesión termina cuando el usuario lo decida.
     showDownloadSuccessAlert();
+  };
 
-    // Limpiar después de 2 segundos (cuando termina la alerta)
-    setTimeout(() => {
-      setShowDownload(false);
-      setFormData({
-        remote: "",
-        username: "",
-        password: "",
-        port: "1194",
-        proto: "UDP",
-        auth: "SHA256",
-        cipher: "AES-256-GCM",
-        caCert: null,
-        clientCert: null,
-        clientKey: null,
-      });
-
-      // También limpiar los inputs de archivos
-      const fileInputs = document.querySelectorAll('input[type="file"]');
-      fileInputs.forEach((input) => {
-        input.value = "";
-      });
-    }, 2000);
+  // El usuario decide cuándo cerrar la sesión: aquí limpiamos todo y dejamos
+  // el formulario listo para una nueva configuración desde cero.
+  const handleEndSession = () => {
+    endSession();
+    setShowDownload(false);
+    setDownloadUrl("");
+    setFormData({
+      remote: "",
+      username: "",
+      password: "",
+      port: "1194",
+      proto: "UDP",
+      auth: "SHA256",
+      cipher: "AES-256-GCM",
+      caCert: null,
+      clientCert: null,
+      clientKey: null,
+    });
+    const fileInputs = document.querySelectorAll('input[type="file"]');
+    fileInputs.forEach((input) => {
+      input.value = "";
+    });
+    Swal.fire({
+      icon: "success",
+      title: "Sesión finalizada",
+      text: "Puedes empezar una nueva configuración cuando quieras.",
+      toast: true,
+      position: "top-end",
+      showConfirmButton: false,
+      timer: 2000,
+      timerProgressBar: true,
+      background: "#F9FAFB",
+    });
   };
 
   return (
@@ -388,10 +386,24 @@ const Mikrotik7Form = () => {
                   >
                     <span className="relative z-10 flex items-center">📥 Descargar OVPN</span>
                   </a>
+                  <button
+                    type="button"
+                    onClick={handleEndSession}
+                    className="bg-rose-500 hover:bg-rose-600 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-all duration-300 transform hover:scale-105 w-full"
+                    title="Limpia el formulario y empieza una nueva configuración"
+                  >
+                    🔚 Terminar sesión y empezar otra
+                  </button>
                 </div>
               </motion.div>
             )}
           </div>
+          {showDownload && (
+            <p className="mt-4 text-center text-xs text-gray-500 dark:text-gray-400">
+              Puedes descargar el OVPN tantas veces como quieras. La sesión NO se
+              cierra sola — solo se cierra cuando pulses "Terminar sesión".
+            </p>
+          )}
         </div>
       </form>
     </motion.div>

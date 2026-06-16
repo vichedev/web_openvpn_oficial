@@ -15,15 +15,31 @@ const VERSIONS = [
     id: "v6",
     icon: "📟",
     label: "RouterOS 6",
-    desc: "RouterOS 6.x — solo protocolo TCP y cifrados clásicos (sin sufijo).",
+    desc:
+      "RouterOS 6.x. Servidor OVPN singleton con 'set enabled=yes'. Solo TCP, " +
+      "cifrados clásicos sin sufijo (aes128, aes192, aes256).",
+  },
+  {
+    id: "v7-legacy",
+    icon: "⚙️",
+    label: "RouterOS 7.0 – 7.16",
+    desc:
+      "RouterOS 7 anterior a 7.17 (incluye 7.15 y 7.16). Servidor singleton con " +
+      "'set enabled=yes' incluyendo protocol=. Acepta UDP y TCP, cifrados con sufijo -cbc y -gcm.",
   },
   {
     id: "v7",
     icon: "🚀",
-    label: "RouterOS 7",
-    desc: "RouterOS 7.x — un único script válido desde la 7.0 hasta la 7.15+ (se autoadapta).",
+    label: "RouterOS 7.17+",
+    desc:
+      "RouterOS 7.17 o superior. Servidor multi-instancia con 'add name=… disabled=no'. " +
+      "El modelo de varios servidores OVPN llegó en 7.17 — NO en 7.15. Si tu router es " +
+      "7.15 o 7.16, elige la opción anterior (7.0 – 7.16).",
   },
 ];
+
+// Para saber qué versión tienes, ejecuta en tu router: /system resource print
+// y mira la línea "version".
 
 const CertificateSection = () => {
   // Todos los datos del servidor viven en la SESIÓN, para que se autocompleten
@@ -40,6 +56,7 @@ const CertificateSection = () => {
     localAddress,
     poolRange,
     dns,
+    validUntil,
     credentialsCreated,
   } = session;
 
@@ -56,9 +73,41 @@ const CertificateSection = () => {
   const setLocalAddress = (v) => updateSession({ localAddress: v });
   const setPoolRange = (v) => updateSession({ poolRange: v });
   const setDns = (v) => updateSession({ dns: v });
+  const setValidUntil = (v) => updateSession({ validUntil: v });
 
   const versionInfo = VERSIONS.find((v) => v.id === selectedVersion);
   const isV6 = selectedVersion === "v6";
+
+  // --- Caducidad de la VPN (fecha de fin de los certificados) ---
+  // El usuario elige una fecha; la convertimos a "days-valid" para el script.
+  // Cuando el certificado caduca, la conexión OpenVPN deja de funcionar.
+  const toISODate = (d) => {
+    const off = d.getTimezoneOffset();
+    return new Date(d.getTime() - off * 60000).toISOString().slice(0, 10);
+  };
+  const todayISO = toISODate(new Date());
+  const addDaysISO = (n) => {
+    const d = new Date();
+    d.setDate(d.getDate() + n);
+    return toISODate(d);
+  };
+  // Por defecto (si el usuario no toca nada): hoy + 10 años, como antes.
+  const defaultValidUntil = addDaysISO(3650);
+  const effectiveValidUntil = validUntil || defaultValidUntil;
+  const daysFromToday = (iso) => {
+    const target = new Date(`${iso}T00:00:00`);
+    const base = new Date(`${todayISO}T00:00:00`);
+    return Math.round((target - base) / 86400000);
+  };
+  const validDays = daysFromToday(effectiveValidUntil);
+  // Presets rápidos de duración.
+  const VALID_PRESETS = [
+    { label: "30 días", days: 30 },
+    { label: "90 días", days: 90 },
+    { label: "1 año", days: 365 },
+    { label: "5 años", days: 1825 },
+    { label: "10 años", days: 3650 },
+  ];
 
   // Al escribir una red CIDR válida, autocompletamos gateway y pool (editables después).
   const handleNetworkChange = (value) => {
@@ -85,6 +134,7 @@ const CertificateSection = () => {
       localAddress: localAddress || net.localAddress,
       poolRange: poolRange || net.poolRange,
       dns: dns || VPN_DEFAULTS.dns,
+      daysValid: validDays,
     });
   }, [
     selectedVersion,
@@ -98,6 +148,7 @@ const CertificateSection = () => {
     localAddress,
     poolRange,
     dns,
+    validDays,
   ]);
 
   const showErrorAlert = (text) =>
@@ -128,6 +179,10 @@ const CertificateSection = () => {
       return showErrorAlert("Indica la IP del gateway de la VPN (local-address).");
     if (!poolRange.trim())
       return showErrorAlert("Indica el rango del pool de IPs para los clientes.");
+    if (validDays < 1)
+      return showErrorAlert(
+        "La fecha de caducidad de la VPN debe ser posterior a hoy."
+      );
 
     setShowScript(true);
     // Las credenciales ya están creadas: la sesión pasa a su fase final.
@@ -425,6 +480,54 @@ const CertificateSection = () => {
                 </div>
               </div>
 
+              {/* Caducidad de la VPN: fija la validez de los certificados */}
+              <div className="p-4 bg-amber-50 dark:bg-amber-900/15 rounded-xl border border-amber-200 dark:border-amber-700/60">
+                <h4 className="font-semibold text-amber-800 dark:text-amber-300 mb-1 flex items-center gap-2">
+                  <span className="text-lg">⏳</span> Caducidad de la VPN
+                </h4>
+                <p className="text-xs text-amber-700/90 dark:text-amber-300/80 mb-3">
+                  Fecha en la que los certificados (y por tanto la conexión VPN) dejarán
+                  de funcionar. Úsala para dar accesos temporales. Por defecto: 10 años.
+                </p>
+                <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+                  <Field label="La VPN caduca el:">
+                    <input
+                      type="date"
+                      value={effectiveValidUntil}
+                      min={addDaysISO(1)}
+                      onChange={(e) => setValidUntil(e.target.value)}
+                      className="input-vpn"
+                    />
+                  </Field>
+                  <div className="flex flex-wrap gap-2 pb-1">
+                    {VALID_PRESETS.map((p) => {
+                      const presetDate = addDaysISO(p.days);
+                      const active = effectiveValidUntil === presetDate;
+                      return (
+                        <button
+                          key={p.days}
+                          type="button"
+                          onClick={() => setValidUntil(presetDate)}
+                          className={
+                            "px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors " +
+                            (active
+                              ? "bg-amber-500 border-amber-500 text-white"
+                              : "bg-white/70 dark:bg-slate-800/60 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/30")
+                          }
+                        >
+                          {p.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <p className="mt-2 text-xs text-amber-800/80 dark:text-amber-300/70">
+                  {validDays >= 1
+                    ? `Validez: ${validDays} día${validDays === 1 ? "" : "s"} (days-valid=${validDays} en el script).`
+                    : "⚠️ La fecha debe ser posterior a hoy."}
+                </p>
+              </div>
+
               <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-700 flex items-start gap-3">
                 <span className="text-blue-500 text-lg">ℹ️</span>
                 <div>
@@ -490,11 +593,22 @@ const CertificateSection = () => {
                 <h4 className="font-semibold text-yellow-800 dark:text-yellow-200 mb-3 flex items-center gap-2">
                   <span className="text-lg">📁</span> Pasos finales
                 </h4>
-                <ol className="text-yellow-700 dark:text-yellow-300 space-y-1 text-sm list-decimal list-inside">
-                  <li>Pega el script en la <strong>New Terminal</strong> del MikroTik.</li>
-                  <li>Espera a que termine de firmar los certificados (1-2 min).</li>
+                <ol className="text-yellow-700 dark:text-yellow-300 space-y-2 text-sm list-decimal list-inside">
                   <li>
-                    Abre <strong>Files</strong> y descarga: <code>ca.crt</code>,{" "}
+                    <strong>Descarga el script</strong> con el botón <em>💾 Descargar .rsc</em> de arriba.
+                  </li>
+                  <li>
+                    Abre <strong>Files</strong> en WinBox/WebFig y <strong>arrastra
+                    el <code>.rsc</code></strong> dentro (o súbelo por FTP).
+                  </li>
+                  <li>
+                    En la <strong>New Terminal</strong> ejecuta:
+                    <pre className="mt-1 bg-yellow-100 dark:bg-yellow-950/50 rounded px-3 py-2 text-xs overflow-x-auto"><code>/import file-name=servidor-openvpn_{clientName || "cliente1"}.rsc</code></pre>
+                    Esto es <strong>mucho más fiable</strong> que pegar el script: el router lee el archivo entero sin riesgo de que se desincronicen las llaves <code>{`{ }`}</code> al pegar.
+                  </li>
+                  <li>Espera a que termine de firmar los certificados (1-3 min). Al final verá <em>"Certificados firmados correctamente."</em> y <em>"Servidor OpenVPN activado correctamente."</em></li>
+                  <li>
+                    En <strong>Files</strong> descarga: <code>ca.crt</code>,{" "}
                     <code>{clientName || "cliente1"}.crt</code> y{" "}
                     <code>{clientName || "cliente1"}.key</code>.
                   </li>
@@ -504,6 +618,12 @@ const CertificateSection = () => {
                     archivos.
                   </li>
                 </ol>
+                <p className="mt-3 text-xs text-yellow-800 dark:text-yellow-200/80">
+                  <strong>⚠️ Importante:</strong> Si decides pegar el script directamente (no recomendado),
+                  hazlo de UNA SOLA VEZ con Ctrl+V — no por trozos — y solo si tu router es accesible por
+                  consola estable. Pegar en sesiones SSH lentas o con copy-paste fragmentado puede dejar
+                  el terminal atrapado en <code>{`{[{...`}</code> esperando llaves.
+                </p>
               </div>
 
               {/* Credenciales creadas -> opción de terminar sesión */}

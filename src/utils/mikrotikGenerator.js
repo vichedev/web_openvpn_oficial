@@ -97,6 +97,7 @@ export function generateOvpnFile({
   clientCert = "",
   clientKey = "",
   redirectGateway = true,
+  dns = VPN_DEFAULTS.dns,
 }) {
   const finalProto = normalizeProto(version, proto);
   const isGcm = /gcm/i.test(cipher);
@@ -126,8 +127,12 @@ export function generateOvpnFile({
   // Compatibilidad de cifrado:
   //  - RouterOS 6: NO negocia cifrado (sin NCP). Hay que FORZAR el cifrado elegido
   //    y limitar data-ciphers al mismo, o el cliente moderno se queja.
-  //  - RouterOS 7: negocia. Para GCM dejamos que data-ciphers haga el trabajo;
-  //    para CBC fijamos cipher y ofrecemos GCM como alternativa.
+  //  - RouterOS 7 + CBC: forzamos SOLO CBC y NO ofrecemos GCM. RouterOS 7.17+ tiene
+  //    un bug de descifrado con AES-*-GCM ("cipher final failed") que rompe el
+  //    handshake; si el cliente ofreciera GCM, el servidor podria negociarlo y
+  //    fallar. Ofrecer unicamente CBC garantiza una conexion estable.
+  //  - RouterOS 7 + GCM: el usuario lo eligio expresamente; ofrecemos GCM con CBC
+  //    como respaldo. (Si tu router es 7.17+ y no conecta, cambia a un cifrado CBC.)
   if (isV6) {
     lines.push(`cipher ${cipher}`);
     lines.push(`data-ciphers ${cipher}`);
@@ -139,14 +144,29 @@ export function generateOvpnFile({
     lines.push("data-ciphers-fallback AES-256-CBC");
   } else {
     lines.push(`cipher ${cipher}`);
-    lines.push(`data-ciphers ${dataCiphers([cipher, "AES-256-GCM", "AES-128-GCM"])}`);
+    lines.push(`data-ciphers ${dataCiphers([cipher, "AES-256-CBC", "AES-128-CBC"])}`);
     lines.push(`data-ciphers-fallback ${cipher}`);
   }
 
-  lines.push("auth-nocache");
+  // NO usamos 'auth-nocache': OpenVPN Connect lo rechaza al reconectar con el
+  // error "Required credentials are missing for the reconnection attempt"
+  // (sin la credencial cacheada no puede renegociar). Dejar que el cliente
+  // recuerde usuario/clave es lo que permite que la reconexion funcione.
   lines.push("mute 10");
   lines.push("verb 3");
   if (redirectGateway) lines.push("redirect-gateway def1");
+
+  // DNS para el cliente. IMPORTANTE: el servidor OpenVPN de MikroTik NO envia
+  // (push) servidores DNS al cliente -> el 'dns-server' del perfil PPP es solo
+  // para el enlace, no llega al PC/movil. Si tunelizamos todo el trafico con
+  // 'redirect-gateway def1' y no fijamos DNS aqui, el cliente conecta pero NO
+  // resuelve nombres ("VPN conectada pero sin internet"). Por eso emitimos los
+  // DNS con 'dhcp-option DNS', soportado por OpenVPN Connect y OpenVPN GUI.
+  const dnsServers = String(dns || "")
+    .split(/[\s,;]+/)
+    .map((d) => d.trim())
+    .filter((d) => /^\d{1,3}(\.\d{1,3}){3}$/.test(d));
+  for (const d of dnsServers) lines.push(`dhcp-option DNS ${d}`);
   lines.push("");
 
   // Usuario/clave PPP embebidos (si se proporcionan) o solicitud interactiva.
@@ -202,11 +222,26 @@ export function generateServerScript({
   netmask = VPN_DEFAULTS.netmask,
   dns = VPN_DEFAULTS.dns,
   profileName = VPN_DEFAULTS.profileName,
+  daysValid = 3650,
 } = {}) {
-  // Solo 2 ramas: RouterOS 6 o RouterOS 7. La rama v7 sirve para TODO 7.x.
+  // 3 ramas explicitas elegidas por el usuario (sin deteccion automatica):
+  //   - "v6"        : RouterOS 6.x          -> servidor singleton, set enabled=yes, TCP.
+  //   - "v7-legacy" : RouterOS 7.0 - 7.16   -> servidor singleton, set enabled=yes, UDP/TCP.
+  //   - "v7"        : RouterOS 7.17 o sup.  -> servidor multi-instancia, add ... disabled=no.
+  // NOTA: el modelo multi-instancia ('add name=...') aparecio en 7.17, NO en 7.15.
+  // En 7.15 y 7.16 el servidor sigue siendo unico y se configura con 'set enabled=yes'
+  // (rama "v7-legacy"). Elegir "v7" en un router 7.15/7.16 daria error de sintaxis.
   const isV6 = routerVersion === "v6";
+  const isV7Legacy = routerVersion === "v7-legacy";
+  // El resto (routerVersion === "v7" o vacio) cae en la rama multi-instancia 7.17+.
+  const usesSingleton = isV6 || isV7Legacy;
   const finalProto = isV6 ? "tcp" : (proto || "udp").toLowerCase();
   const cn = clientName || "cliente1";
+  // Validez de los certificados (en dias). Es lo que fija la "fecha de fin" de la
+  // VPN: cuando el certificado del servidor o del cliente caduca, la conexion deja
+  // de funcionar. El usuario elige una fecha en la web y se convierte a dias aqui.
+  // Acotamos a un minimo de 1 dia y un maximo de ~27 anios (RouterOS lo admite).
+  const days = Math.max(1, Math.min(9999, Math.round(Number(daysValid)) || 3650));
 
   // Cifrados y autenticaciones soportados segun la version de RouterOS.
   // Listamos TODOS los soportados para que el servidor acepte cualquier
@@ -217,35 +252,65 @@ export function generateServerScript({
   const authList = isV6 ? "sha1,md5" : "sha1,md5,sha256";
 
   const L = [];
+  L.push("# --- 0. LIMPIEZA: borrar restos de intentos anteriores ---");
+  L.push("# Cada borrado usa 'remove [find ...]'. En RouterOS, si find no encuentra");
+  L.push("# nada, devuelve una lista vacia y remove no hace nada (no hay error).");
+  L.push("# Por eso NO hace falta envolver con :do{} on-error={} -> mantenemos");
+  L.push("# el script PLANO (una linea por comando) y a prueba de pegado.");
+  if (usesSingleton) {
+    L.push("# Servidor OVPN singleton (v6 o v7.0-7.16) -> soltamos su cert y lo apagamos.");
+    L.push("/interface ovpn-server server set certificate=none");
+    L.push("/interface ovpn-server server set enabled=no");
+  } else {
+    L.push("# RouterOS 7.17+: el servidor OVPN es multi-instancia -> borramos el nuestro.");
+    L.push("/interface ovpn-server server remove [find name=ovpn-server1]");
+  }
+  L.push(`/ppp secret remove [find name=${cn}]`);
+  L.push(`/ppp profile remove [find name=${profileName}]`);
+  L.push(`/ip pool remove [find name=${poolName}]`);
+  L.push('/ip firewall filter remove [find comment="OpenVPN-Web"]');
+  L.push('/ip firewall nat remove [find comment="OpenVPN-Web-NAT"]');
+  L.push(`/certificate remove [find name=${cn}]`);
+  L.push("/certificate remove [find name=server]");
+  L.push("/certificate remove [find name=ca]");
+  L.push("# Borrado de los archivos exportados anteriormente, uno por uno con");
+  L.push("# nombre EXACTO (sin regex). El terminal de MikroTik se atragantaba con");
+  L.push("# expresiones del tipo name~\"^(ca|X)\\\\.(crt|key)$\" y dejaba todo");
+  L.push("# el resto del script atrapado en el buffer interno.");
+  L.push("/file remove [find name=\"ca.crt\"]");
+  L.push(`/file remove [find name="${cn}.crt"]`);
+  L.push(`/file remove [find name="${cn}.key"]`);
+  L.push(':put "Limpieza OK. Empezando configuracion desde cero..."');
+  L.push("");
+
   L.push("# --- 1. CERTIFICADOS: crear plantillas (CA, servidor y cliente) ---");
   L.push("# Usamos la ruta completa en cada linea (no dependemos del contexto /certificate).");
-  L.push("/certificate add name=ca common-name=ca-ovpn key-usage=key-cert-sign,crl-sign days-valid=3650");
-  L.push("/certificate add name=server common-name=server-ovpn days-valid=3650 key-usage=digital-signature,key-encipherment,tls-server");
-  L.push(`/certificate add name=${cn} common-name=${cn} days-valid=3650 key-usage=tls-client`);
+  L.push(`# Validez configurada por el usuario: ${days} dias desde la firma.`);
+  L.push(`/certificate add name=ca common-name=ca-ovpn key-usage=key-cert-sign,crl-sign days-valid=${days}`);
+  L.push(`/certificate add name=server common-name=server-ovpn days-valid=${days} key-usage=digital-signature,key-encipherment,tls-server`);
+  L.push(`/certificate add name=${cn} common-name=${cn} days-valid=${days} key-usage=tls-client`);
   L.push("");
 
   L.push("# --- 2. FIRMAR los certificados (cada uno puede tardar de segundos a 1-2 min) ---");
-  L.push("# Tras cada 'sign' esperamos a que el certificado tenga numero de serie");
-  L.push("# (= ya firmado) con un :for acotado. Sin funciones ni condiciones compuestas,");
-  L.push("# para que funcione igual en RouterOS 6.x y 7.x (incluida la consola 7.15+).");
-  L.push("# El :for se ejecuta hasta 180 veces (max ~3 min por certificado) y solo");
-  L.push("# espera mientras el serial este vacio; en cuanto se firma, sigue de largo.");
-  L.push(":do {");
-  L.push(`  /certificate sign ca ca-crl-host=${publicIp} name=ca`);
-  L.push('  :for i from=1 to=180 do={ :if ([/certificate get [find name=ca] serial-number] = "") do={ :delay 1s } }');
-  L.push("  /certificate sign server ca=ca name=server");
-  L.push('  :for i from=1 to=180 do={ :if ([/certificate get [find name=server] serial-number] = "") do={ :delay 1s } }');
-  L.push(`  /certificate sign ${cn} ca=ca name=${cn}`);
-  L.push(`  :for i from=1 to=180 do={ :if ([/certificate get [find name=${cn}] serial-number] = "") do={ :delay 1s } }`);
-  L.push('  :put "Certificados firmados correctamente."');
-  L.push("} on-error={");
-  L.push('  :put "ERROR al firmar. Revisa con: /certificate print"');
-  L.push("}");
+  L.push("# Cada par (sign + :for de espera) son 2 LINEAS INDEPENDIENTES. El :for");
+  L.push("# es un one-liner con llaves balanceadas en la misma linea -> el terminal");
+  L.push("# nunca queda atrapado esperando '}'.");
+  L.push(`/certificate sign ca ca-crl-host=${publicIp} name=ca`);
+  L.push(':for i from=1 to=180 do={ :if ([/certificate get [find name=ca] serial-number] = "") do={ :delay 1s } }');
+  L.push("/certificate sign server ca=ca name=server");
+  L.push(':for i from=1 to=180 do={ :if ([/certificate get [find name=server] serial-number] = "") do={ :delay 1s } }');
+  L.push(`/certificate sign ${cn} ca=ca name=${cn}`);
+  L.push(`:for i from=1 to=180 do={ :if ([/certificate get [find name=${cn}] serial-number] = "") do={ :delay 1s } }`);
+  L.push(':put "Certificados firmados OK."');
   L.push("");
 
   L.push("# --- 3. Marcar los certificados como CONFIABLES ---");
+  L.push("# IMPORTANTE: en RouterOS 7.x el certificado del CLIENTE tambien debe ir");
+  L.push("# como trusted=yes. Si no, el servidor OVPN responde con 'alert 48");
+  L.push("# (unknown_ca)' en el handshake mutuo aunque la cadena este perfecta.");
   L.push("/certificate set ca trusted=yes");
   L.push("/certificate set server trusted=yes");
+  L.push(`/certificate set ${cn} trusted=yes`);
   L.push("");
 
   L.push("# --- 4. POOL de direcciones IP para los clientes VPN ---");
@@ -262,58 +327,17 @@ export function generateServerScript({
 
   L.push("# --- 7. ACTIVAR el servidor OpenVPN ---");
   if (isV6) {
-    // RouterOS 6: servidor unico, sintaxis "set", solo TCP (sin parametro protocol).
+    L.push("# RouterOS 6: servidor singleton con 'set enabled=yes'. Sin parametro protocol.");
     L.push(`/interface ovpn-server server set enabled=yes certificate=server require-client-certificate=yes auth=${authList} cipher=${cipherList} default-profile=${profileName} netmask=${netmask} mode=ip port=${port}`);
+  } else if (isV7Legacy) {
+    L.push("# RouterOS 7.0 - 7.16: servidor singleton con 'set enabled=yes' + protocol=.");
+    L.push(`/interface ovpn-server server set enabled=yes certificate=server require-client-certificate=yes auth=${authList} cipher=${cipherList} protocol=${finalProto} default-profile=${profileName} netmask=${netmask} mode=ip port=${port}`);
   } else {
-    // RouterOS 7: detectamos la version REAL para usar la sintaxis correcta.
-    //   - 7.15 o superior: servidores multiples -> "add" (idempotente: borra el
-    //     que tenga el mismo nombre antes de crearlo, asi re-ejecutar no falla).
-    //   - 7.0 a 7.14:      servidor unico        -> "set enabled=yes".
-    // En 7.15+ ya NO existe la propiedad "enabled" del servidor unico; por eso
-    // un "set enabled=yes" da error en 7.15/7.16/7.17.
-    // Todo va dentro de un solo bloque :do {} para que se pegue de una vez y las
-    // variables :local persistan aunque pegues el script linea por linea.
-    const common =
-      `certificate=server require-client-certificate=yes ` +
-      `auth=${authList} cipher=${cipherList} protocol=${finalProto} ` +
-      `default-profile=${profileName} netmask=${netmask} mode=ip port=${port}`;
-    L.push(":do {");
-    L.push("  :local ver [/system resource get version]");
-    L.push('  :local sp [:find $ver " "]');
-    L.push('  :if ([:typeof $sp] = "nil") do={ :set sp [:len $ver] }');
-    L.push("  :local vnum [:pick $ver 0 $sp]");
-    L.push('  :local d1 [:find $vnum "."]');
-    L.push("  :local major [:tonum [:pick $vnum 0 $d1]]");
-    L.push("  :local rest [:pick $vnum ($d1 + 1) [:len $vnum]]");
-    L.push('  :local d2 [:find $rest "."]');
-    L.push('  :if ([:typeof $d2] = "nil") do={ :set d2 [:len $rest] }');
-    L.push("  :local minor [:tonum [:pick $rest 0 $d2]]");
-    L.push("  # Decidimos si usamos la sintaxis nueva (add) sin condiciones compuestas:");
-    L.push("  :local useAdd false");
-    L.push("  :if ($major > 7) do={ :set useAdd true }");
-    L.push("  :if ($major = 7) do={ :if ($minor >= 15) do={ :set useAdd true } }");
-    L.push(`  :local common "${common}"`);
-    L.push("  # IMPORTANTE: los comandos del servidor van como TEXTO y se ejecutan con");
-    L.push("  # [:parse] SOLO en la rama que corresponde. De este modo la consola de");
-    L.push("  # RouterOS 7.15+ no valida (ni rechaza con 'syntax error') la sintaxis");
-    L.push("  # antigua 'set enabled=yes' al leer el script, ya que esa palabra solo se");
-    L.push("  # compila si realmente toca ejecutarla.");
-    L.push("  :if ($useAdd = true) do={");
-    L.push("    # 7.15+ : borra un servidor previo con el mismo nombre (idempotente) y crea.");
-    L.push('    :local rmFunc [:parse "/interface ovpn-server server remove [find name=ovpn-server1]"]');
-    L.push("    :do { $rmFunc } on-error={}");
-    L.push('    :local addFunc [:parse ("/interface ovpn-server server add name=ovpn-server1 " . $common . " disabled=no")]');
-    L.push("    $addFunc");
-    L.push("  } else={");
-    L.push("    # 7.0 - 7.14 : servidor unico con 'set enabled=yes'.");
-    L.push('    :local setFunc [:parse ("/interface ovpn-server server set enabled=yes " . $common)]');
-    L.push("    $setFunc");
-    L.push("  }");
-    L.push('  :put "Servidor OpenVPN activado correctamente."');
-    L.push("} on-error={");
-    L.push('  :put "ERROR activando el servidor OVPN. Revisa: /interface ovpn-server server print"');
-    L.push("}");
+    L.push("# RouterOS 7.17 o superior: servidor multi-instancia con 'add ... disabled=no'.");
+    L.push("# El servidor previo con el mismo nombre ya se elimino en la seccion 0.");
+    L.push(`/interface ovpn-server server add name=ovpn-server1 certificate=server require-client-certificate=yes auth=${authList} cipher=${cipherList} protocol=${finalProto} default-profile=${profileName} netmask=${netmask} mode=ip port=${port} disabled=no`);
   }
+  L.push(':put "Servidor OpenVPN activado OK."');
   L.push("");
 
   L.push("# --- 8. FIREWALL: permitir el puerto de OpenVPN (regla movida al inicio) ---");

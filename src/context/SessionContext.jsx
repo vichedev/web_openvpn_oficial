@@ -34,6 +34,9 @@ const emptySession = {
   localAddress: "10.10.10.1",
   poolRange: "10.10.10.10-10.10.10.254",
   dns: "8.8.8.8,1.1.1.1",
+  // Fecha de caducidad de la VPN (YYYY-MM-DD). Determina los days-valid de los
+  // certificados. Vacío = el formulario lo inicializa a hoy + 10 años.
+  validUntil: "",
   credentialsCreated: false, // true tras generar el script del servidor
   startedAt: null,
 };
