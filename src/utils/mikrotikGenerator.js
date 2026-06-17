@@ -202,6 +202,112 @@ export function generateOvpnFile({
 // ============================================================================
 
 /**
+ * Construye el script para RouterOS de INSTANCIA UNICA (v6 / 7.0-7.16).
+ *
+ * Modelo CA COMPARTIDA: el router solo admite UN servidor OVPN, asi que la CA y
+ * el certificado de servidor son COMPARTIDOS y se crean SOLO la primera vez
+ * (bloques :if idempotentes). Cada vez que se ejecuta, solo AÑADE el usuario
+ * indicado (certificado de cliente firmado por la CA compartida + ppp secret).
+ * Asi conviven varios usuarios en el unico servidor sin romper la validacion
+ * (que es lo que provoca 'peer certificate verification failure' si cada usuario
+ * tuviera su propia CA).
+ *
+ * IMPORTANTE: ejecutar con  /import file-name=...rsc  (contiene bloques :if).
+ */
+function buildSharedSingletonScript({
+  isV6, finalProto, cn, publicIp, port, clientPassword,
+  poolRange, localAddress, network, netmask, dns, days, cipherList, authList,
+}) {
+  // Infraestructura COMPARTIDA: nombres fijos, iguales para todos los usuarios.
+  const CA = "ca-ovpn";
+  const SRV = "srv-ovpn";
+  const POOL = "ovpn-pool";
+  const PROF = "ovpn-profile";
+  const FW = "OpenVPN-Web";
+  const NAT = "OpenVPN-Web-NAT";
+  const protoParam = isV6 ? "" : ` protocol=${finalProto}`;
+
+  const L = [];
+  L.push(`# === Usuario VPN "${cn}" en servidor OpenVPN COMPARTIDO (RouterOS instancia unica) ===`);
+  L.push("# En RouterOS 6 / 7.0-7.16 solo existe UN servidor OVPN. Todos los usuarios");
+  L.push(`# comparten la misma CA (${CA}) y el mismo certificado de servidor (${SRV}).`);
+  L.push("# Este script crea esa infraestructura SOLO la primera vez y despues solo");
+  L.push(`# anade el usuario "${cn}". Ejecutalo una vez por cada usuario que quieras.`);
+  L.push("#");
+  L.push("# >>> EJECUTALO CON:  /import file-name=<archivo>.rsc  <<<");
+  L.push("# (Tiene bloques condicionales :if; importar es lo fiable, NO pegar.)");
+  L.push("");
+
+  L.push("# --- 0. LIMPIEZA: SOLO este usuario (no toca CA, servidor ni otros usuarios) ---");
+  L.push(`/ppp secret remove [find name=${cn}]`);
+  L.push(`/certificate remove [find name=${cn}]`);
+  L.push(`/file remove [find name="${cn}.crt"]`);
+  L.push(`/file remove [find name="${cn}.key"]`);
+  L.push(`:put "Preparando usuario ${cn}..."`);
+  L.push("");
+
+  L.push("# --- 1. INFRAESTRUCTURA COMPARTIDA (se crea solo si aun no existe) ---");
+  L.push("# 1a. CA compartida");
+  L.push(`:if ([:len [/certificate find name=${CA}]] = 0) do={`);
+  L.push(`  :put "Creando CA compartida ${CA} (primera vez, puede tardar 1-2 min)..."`);
+  L.push(`  /certificate add name=${CA} common-name=${CA} key-usage=key-cert-sign,crl-sign days-valid=${days}`);
+  L.push(`  /certificate sign ${CA} ca-crl-host=${publicIp} name=${CA}`);
+  L.push(`  :for i from=1 to=180 do={ :if ([/certificate get [find name=${CA}] serial-number] = "") do={ :delay 1s } }`);
+  L.push(`  /certificate set ${CA} trusted=yes`);
+  L.push("}");
+  L.push("# 1b. Certificado del servidor compartido");
+  L.push(`:if ([:len [/certificate find name=${SRV}]] = 0) do={`);
+  L.push(`  /certificate add name=${SRV} common-name=${SRV} days-valid=${days} key-usage=digital-signature,key-encipherment,tls-server`);
+  L.push(`  /certificate sign ${SRV} ca=${CA} name=${SRV}`);
+  L.push(`  :for i from=1 to=180 do={ :if ([/certificate get [find name=${SRV}] serial-number] = "") do={ :delay 1s } }`);
+  L.push(`  /certificate set ${SRV} trusted=yes`);
+  L.push("}");
+  L.push("# Reaseguramos trusted=yes (por si una ejecucion previa creo la CA/cert");
+  L.push("# pero se interrumpio antes de marcarlos). Es idempotente y evita el");
+  L.push("# 'peer certificate verification failure' por una CA no confiable.");
+  L.push(`/certificate set [find name=${CA}] trusted=yes`);
+  L.push(`/certificate set [find name=${SRV}] trusted=yes`);
+  L.push("# 1c. Pool de IPs compartido");
+  L.push(`:if ([:len [/ip pool find name=${POOL}]] = 0) do={ /ip pool add name=${POOL} ranges=${poolRange} }`);
+  L.push("# 1d. Perfil PPP compartido");
+  L.push(`:if ([:len [/ppp profile find name=${PROF}]] = 0) do={ /ppp profile add name=${PROF} local-address=${localAddress} remote-address=${POOL} use-encryption=yes change-tcp-mss=yes dns-server=${dns} }`);
+  L.push("# 1e. Servidor OVPN unico -> se configura SIEMPRE (set es idempotente).");
+  L.push("# OJO: todos los usuarios comparten este puerto y este certificado de servidor.");
+  L.push(`/interface ovpn-server server set enabled=yes certificate=${SRV} require-client-certificate=yes auth=${authList} cipher=${cipherList}${protoParam} default-profile=${PROF} netmask=${netmask} mode=ip port=${port}`);
+  L.push("# 1f. Firewall: abrir el puerto. Reescribimos la regla SIEMPRE para que");
+  L.push("#     coincida con el puerto/protocolo del servidor de arriba (si cambian).");
+  L.push(`/ip firewall filter remove [find comment="${FW}"]`);
+  L.push(`/ip firewall filter add chain=input action=accept protocol=${finalProto} dst-port=${port} comment="${FW}"`);
+  L.push(`/ip firewall filter move [find comment="${FW}"] destination=0`);
+  L.push("# 1g. NAT: salida a Internet para la red VPN. Tambien se reescribe siempre");
+  L.push("#     para que coincida con la red VPN compartida (src-address).");
+  L.push(`/ip firewall nat remove [find comment="${NAT}"]`);
+  L.push(`/ip firewall nat add chain=srcnat action=src-nat to-addresses=${publicIp} src-address=${network} comment="${NAT}"`);
+  L.push(`/ip firewall nat move [find comment="${NAT}"] destination=0`);
+  L.push(':put "Infraestructura compartida lista."');
+  L.push("");
+
+  L.push(`# --- 2. USUARIO "${cn}": certificado de cliente firmado por la CA compartida ---`);
+  L.push(`/certificate add name=${cn} common-name=${cn} days-valid=${days} key-usage=tls-client`);
+  L.push(`/certificate sign ${cn} ca=${CA} name=${cn}`);
+  L.push(`:for i from=1 to=180 do={ :if ([/certificate get [find name=${cn}] serial-number] = "") do={ :delay 1s } }`);
+  L.push(`/certificate set ${cn} trusted=yes`);
+  L.push(`/ppp secret add name=${cn} password="${clientPassword}" service=ovpn profile=${PROF}`);
+  L.push(':put "Usuario creado OK."');
+  L.push("");
+
+  L.push("# --- 3. EXPORTAR: la CA compartida + el cert/clave de este usuario ---");
+  L.push(`/certificate export-certificate ${CA} file-name=${CA}`);
+  L.push(`/certificate export-certificate ${cn} export-passphrase="${clientPassword}" file-name=${cn}`);
+  L.push("");
+  L.push(`# En Files apareceran:  ${CA}.crt  (la MISMA para todos los usuarios)`);
+  L.push(`#                        ${cn}.crt  /  ${cn}.key  (de este usuario)`);
+  L.push(`# En la pestana 'Configurar' sube:  ${CA}.crt  +  ${cn}.crt  +  ${cn}.key`);
+
+  return L.join("\n") + "\n";
+}
+
+/**
  * Genera el script .rsc COMPLETO para convertir un MikroTik en servidor OpenVPN:
  * certificados, pool de IP, perfil PPP, usuario, servidor OVPN, firewall y NAT.
  *
@@ -236,22 +342,6 @@ export function generateServerScript({
   const finalProto = isV6 ? "tcp" : (proto || "udp").toLowerCase();
   const cn = clientName || "cliente1";
 
-  // ---------------------------------------------------------------------------
-  //  NOMBRES UNICOS POR VPN
-  //  Cada objeto (CA, cert servidor, pool, perfil, servidor OVPN, reglas de
-  //  firewall y archivos exportados) cuelga del nombre del cliente. Asi puedes
-  //  crear VARIAS VPN en el MISMO router sin que choquen ni se borren entre si.
-  //  La limpieza de mas abajo SOLO toca los objetos de ESTA VPN (su nombre unico),
-  //  nunca las demas.
-  // ---------------------------------------------------------------------------
-  const caName = `ca-${cn}`;        // certificado CA de esta VPN
-  const srvCert = `srv-${cn}`;      // certificado del servidor de esta VPN
-  const poolNm = `pool-${cn}`;      // pool de IPs de esta VPN
-  const profNm = `prof-${cn}`;      // perfil PPP de esta VPN
-  const srvName = `ovpn-${cn}`;     // servidor OVPN (solo en 7.17+ multi-instancia)
-  const fwComment = `OpenVPN-Web-${cn}`;
-  const natComment = `OpenVPN-Web-NAT-${cn}`;
-
   // Validez de los certificados (en dias). Es lo que fija la "fecha de fin" de la
   // VPN: cuando el certificado del servidor o del cliente caduca, la conexion deja
   // de funcionar. El usuario elige una fecha en la web y se convierte a dias aqui.
@@ -266,26 +356,47 @@ export function generateServerScript({
     : "aes128-cbc,aes192-cbc,aes256-cbc,aes128-gcm,aes192-gcm,aes256-gcm";
   const authList = isV6 ? "sha1,md5" : "sha1,md5,sha256";
 
+  // ===========================================================================
+  //  DOS MODELOS SEGUN LA VERSION
+  //  - INSTANCIA UNICA (v6 / 7.0-7.16): el router solo admite UN servidor OVPN.
+  //    Por eso CA y certificado de servidor son COMPARTIDOS por todos los usuarios
+  //    y se crean SOLO la primera vez (idempotente). Cada usuario nuevo es solo un
+  //    certificado de cliente (firmado por esa CA) + un ppp secret. Crear una CA
+  //    distinta por usuario provocaria 'peer certificate verification failure',
+  //    porque el unico servidor solo puede presentar UN certificado.
+  //  - MULTI-INSTANCIA (7.17+): cada VPN es independiente, con su propia CA,
+  //    certificado de servidor, pool, perfil y servidor en su propio puerto.
+  // ===========================================================================
+  if (usesSingleton) {
+    return buildSharedSingletonScript({
+      isV6, finalProto, cn, publicIp, port, clientPassword,
+      poolRange, localAddress, network, netmask, dns, days, cipherList, authList,
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  //  MULTI-INSTANCIA (7.17+): NOMBRES UNICOS POR VPN
+  //  Cada objeto cuelga del nombre del cliente -> varias VPN independientes en el
+  //  mismo router sin chocar. La limpieza solo toca los objetos de ESTA VPN.
+  // ---------------------------------------------------------------------------
+  const caName = `ca-${cn}`;        // certificado CA de esta VPN
+  const srvCert = `srv-${cn}`;      // certificado del servidor de esta VPN
+  const poolNm = `pool-${cn}`;      // pool de IPs de esta VPN
+  const profNm = `prof-${cn}`;      // perfil PPP de esta VPN
+  const srvName = `ovpn-${cn}`;     // servidor OVPN de esta VPN
+  const fwComment = `OpenVPN-Web-${cn}`;
+  const natComment = `OpenVPN-Web-NAT-${cn}`;
+
   const L = [];
-  L.push(`# === VPN "${cn}" -> objetos con nombre unico para convivir con otras VPN ===`);
-  L.push(`# CA=${caName}  cert-servidor=${srvCert}  pool=${poolNm}  perfil=${profNm}`);
-  if (!usesSingleton) L.push(`# servidor OVPN=${srvName}  (puerto ${port})`);
+  L.push(`# === VPN "${cn}" (RouterOS 7.17+) -> servidor independiente ovpn-${cn} ===`);
+  L.push(`# CA=${caName}  cert-servidor=${srvCert}  pool=${poolNm}  perfil=${profNm}  puerto=${port}`);
+  L.push("# Usa un PUERTO y una RED distintos por cada VPN para que no choquen.");
   L.push("");
 
   L.push("# --- 0. LIMPIEZA ACOTADA: SOLO esta VPN, nunca las demas ---");
-  L.push("# Borramos exclusivamente los objetos con el nombre unico de ESTA VPN.");
-  L.push("# Asi, reejecutar el mismo cliente lo ACTUALIZA, pero las otras VPN del");
-  L.push("# router quedan intactas. Si find no encuentra nada, remove no hace nada.");
-  if (usesSingleton) {
-    L.push("# OJO (RouterOS 6 / 7.0-7.16): el servidor OVPN es de INSTANCIA UNICA.");
-    L.push("# Solo puede existir UN servidor OpenVPN en el router, y mas abajo se");
-    L.push("# (re)configura con 'set'. En estas versiones NO es posible tener varios");
-    L.push("# servidores OVPN independientes: para varias VPN usa RouterOS 7.17+.");
-    L.push("# No tocamos el servidor aqui para no cortar conexiones en curso.");
-  } else {
-    L.push(`# RouterOS 7.17+: multi-instancia -> borramos SOLO nuestro servidor (${srvName}).`);
-    L.push(`/interface ovpn-server server remove [find name=${srvName}]`);
-  }
+  L.push(`# Borra unicamente los objetos con el nombre unico de ESTA VPN (${cn}).`);
+  L.push("# Reejecutar el mismo cliente lo ACTUALIZA; las otras VPN quedan intactas.");
+  L.push(`/interface ovpn-server server remove [find name=${srvName}]`);
   L.push(`/ppp secret remove [find name=${cn}]`);
   L.push(`/ppp profile remove [find name=${profNm}]`);
   L.push(`/ip pool remove [find name=${poolNm}]`);
@@ -294,25 +405,20 @@ export function generateServerScript({
   L.push(`/certificate remove [find name=${cn}]`);
   L.push(`/certificate remove [find name=${srvCert}]`);
   L.push(`/certificate remove [find name=${caName}]`);
-  L.push("# Archivos exportados de ESTA VPN (nombre exacto, sin regex).");
   L.push(`/file remove [find name="${caName}.crt"]`);
   L.push(`/file remove [find name="${cn}.crt"]`);
   L.push(`/file remove [find name="${cn}.key"]`);
   L.push(`:put "Limpieza de la VPN ${cn} OK (otras VPN intactas)."`);
   L.push("");
 
-  L.push("# --- 1. CERTIFICADOS: crear plantillas (CA, servidor y cliente) ---");
-  L.push("# Usamos la ruta completa en cada linea (no dependemos del contexto /certificate).");
+  L.push("# --- 1. CERTIFICADOS: CA, servidor y cliente (propios de esta VPN) ---");
   L.push(`# Validez configurada por el usuario: ${days} dias desde la firma.`);
   L.push(`/certificate add name=${caName} common-name=${caName} key-usage=key-cert-sign,crl-sign days-valid=${days}`);
   L.push(`/certificate add name=${srvCert} common-name=${srvCert} days-valid=${days} key-usage=digital-signature,key-encipherment,tls-server`);
   L.push(`/certificate add name=${cn} common-name=${cn} days-valid=${days} key-usage=tls-client`);
   L.push("");
 
-  L.push("# --- 2. FIRMAR los certificados (cada uno puede tardar de segundos a 1-2 min) ---");
-  L.push("# Cada par (sign + :for de espera) son 2 LINEAS INDEPENDIENTES. El :for");
-  L.push("# es un one-liner con llaves balanceadas en la misma linea -> el terminal");
-  L.push("# nunca queda atrapado esperando '}'.");
+  L.push("# --- 2. FIRMAR los certificados (cada uno tarda de segundos a 1-2 min) ---");
   L.push(`/certificate sign ${caName} ca-crl-host=${publicIp} name=${caName}`);
   L.push(`:for i from=1 to=180 do={ :if ([/certificate get [find name=${caName}] serial-number] = "") do={ :delay 1s } }`);
   L.push(`/certificate sign ${srvCert} ca=${caName} name=${srvCert}`);
@@ -323,16 +429,12 @@ export function generateServerScript({
   L.push("");
 
   L.push("# --- 3. Marcar los certificados como CONFIABLES ---");
-  L.push("# IMPORTANTE: en RouterOS 7.x el certificado del CLIENTE tambien debe ir");
-  L.push("# como trusted=yes. Si no, el servidor OVPN responde con 'alert 48");
-  L.push("# (unknown_ca)' en el handshake mutuo aunque la cadena este perfecta.");
   L.push(`/certificate set ${caName} trusted=yes`);
   L.push(`/certificate set ${srvCert} trusted=yes`);
   L.push(`/certificate set ${cn} trusted=yes`);
   L.push("");
 
   L.push("# --- 4. POOL de direcciones IP para los clientes VPN ---");
-  L.push("# Usa una RED DISTINTA por cada VPN para que no se solapen (ej: 10.69.x / 10.70.x).");
   L.push(`/ip pool add name=${poolNm} ranges=${poolRange}`);
   L.push("");
 
@@ -344,30 +446,17 @@ export function generateServerScript({
   L.push(`/ppp secret add name=${cn} password="${clientPassword}" service=ovpn profile=${profNm}`);
   L.push("");
 
-  L.push("# --- 7. ACTIVAR el servidor OpenVPN ---");
-  if (isV6) {
-    L.push("# RouterOS 6: servidor de instancia unica con 'set enabled=yes'. Sin parametro protocol.");
-    L.push("# (En v6 todas las VPN comparten este unico servidor.)");
-    L.push(`/interface ovpn-server server set enabled=yes certificate=${srvCert} require-client-certificate=yes auth=${authList} cipher=${cipherList} default-profile=${profNm} netmask=${netmask} mode=ip port=${port}`);
-  } else if (isV7Legacy) {
-    L.push("# RouterOS 7.0 - 7.16: servidor de instancia unica con 'set enabled=yes' + protocol=.");
-    L.push("# (En estas versiones todas las VPN comparten este unico servidor.)");
-    L.push(`/interface ovpn-server server set enabled=yes certificate=${srvCert} require-client-certificate=yes auth=${authList} cipher=${cipherList} protocol=${finalProto} default-profile=${profNm} netmask=${netmask} mode=ip port=${port}`);
-  } else {
-    L.push("# RouterOS 7.17 o superior: servidor multi-instancia con 'add ... disabled=no'.");
-    L.push(`# Cada VPN crea su propio servidor (${srvName}) en su propio puerto (${port}).`);
-    L.push(`/interface ovpn-server server add name=${srvName} certificate=${srvCert} require-client-certificate=yes auth=${authList} cipher=${cipherList} protocol=${finalProto} default-profile=${profNm} netmask=${netmask} mode=ip port=${port} disabled=no`);
-  }
+  L.push("# --- 7. ACTIVAR el servidor OpenVPN (multi-instancia 7.17+) ---");
+  L.push(`/interface ovpn-server server add name=${srvName} certificate=${srvCert} require-client-certificate=yes auth=${authList} cipher=${cipherList} protocol=${finalProto} default-profile=${profNm} netmask=${netmask} mode=ip port=${port} disabled=no`);
   L.push(':put "Servidor OpenVPN activado OK."');
   L.push("");
 
-  L.push("# --- 8. FIREWALL: permitir el puerto de OpenVPN (regla movida al inicio) ---");
+  L.push("# --- 8. FIREWALL: permitir el puerto de OpenVPN ---");
   L.push(`/ip firewall filter add chain=input action=accept protocol=${finalProto} dst-port=${port} comment="${fwComment}"`);
   L.push(`/ip firewall filter move [find comment="${fwComment}"] destination=0`);
   L.push("");
 
-  L.push("# --- 9. NAT: dar salida a Internet a los clientes VPN (src-nat a la IP publica) ---");
-  L.push("# Usamos src-nat con to-addresses fijo a tu IP publica (no masquerade).");
+  L.push("# --- 9. NAT: salida a Internet para los clientes VPN (src-nat a la IP publica) ---");
   L.push("# Si tu IP publica fuera dinamica, cambia la accion a action=masquerade.");
   L.push(`/ip firewall nat add chain=srcnat action=src-nat to-addresses=${publicIp} src-address=${network} comment="${natComment}"`);
   L.push(`/ip firewall nat move [find comment="${natComment}"] destination=0`);
@@ -436,12 +525,12 @@ export function generateClientRouterScript({
   if (isV6) {
     // RouterOS 6: sin parametro protocol (solo TCP).
     L.push(`add name=ovpn-out connect-to=${host} port=${port} \\`);
-    L.push(`    user=${username} password=${password} \\`);
+    L.push(`    user=${username} password="${password}" \\`);
     L.push(`    certificate=cert-cliente auth=${a} cipher=${c} \\`);
     L.push("    mode=ip add-default-route=yes disabled=no");
   } else {
     L.push(`add name=ovpn-out connect-to=${host} port=${port} protocol=${finalProto} \\`);
-    L.push(`    user=${username} password=${password} \\`);
+    L.push(`    user=${username} password="${password}" \\`);
     L.push(`    certificate=cert-cliente auth=${a} cipher=${c} \\`);
     L.push("    mode=ip add-default-route=yes verify-server-certificate=yes disabled=no");
   }

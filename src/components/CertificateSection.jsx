@@ -77,6 +77,12 @@ const CertificateSection = () => {
 
   const versionInfo = VERSIONS.find((v) => v.id === selectedVersion);
   const isV6 = selectedVersion === "v6";
+  // Instancia unica (v6 / 7.0-7.16) -> CA COMPARTIDA (ca-ovpn.crt, igual para todos).
+  // Multi-instancia (7.17+) -> una CA por VPN (ca-<cliente>.crt).
+  const usesSharedCa = selectedVersion === "v6" || selectedVersion === "v7-legacy";
+  const caFileName = usesSharedCa
+    ? "ca-ovpn.crt"
+    : `ca-${clientName || "cliente1"}.crt`;
 
   // --- Caducidad de la VPN (fecha de fin de los certificados) ---
   // El usuario elige una fecha; la convertimos a "days-valid" para el script.
@@ -216,6 +222,31 @@ const CertificateSection = () => {
       background: "#F9FAFB",
       showConfirmButton: false,
       timer: 1600,
+      timerProgressBar: true,
+      customClass: { popup: "rounded-2xl shadow-xl" },
+    });
+  };
+
+  // Prepara el formulario para AÑADIR otro usuario al MISMO servidor: conserva
+  // IP pública, puerto, protocolo, versión, red VPN, DNS y caducidad; solo limpia
+  // el nombre y la contraseña del cliente. El script generado para el nuevo
+  // usuario NO afecta a los ya creados (la CA y el servidor se reutilizan; la
+  // limpieza del script solo toca el usuario nuevo).
+  const handleNewUser = () => {
+    updateSession({ clientName: "", clientPassword: "", credentialsCreated: false });
+    setShowScript(false);
+    setCopied(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    Swal.fire({
+      title: "Listo para otro usuario ➕",
+      html:
+        "Se conservaron los datos del servidor (IP, puerto, red, versión). " +
+        "Escribe el <strong>nombre</strong> y la <strong>contraseña</strong> del nuevo usuario y genera su script.",
+      icon: "info",
+      iconColor: "#0EA5E9",
+      background: "#F9FAFB",
+      showConfirmButton: false,
+      timer: 2600,
       timerProgressBar: true,
       customClass: { popup: "rounded-2xl shadow-xl" },
     });
@@ -608,9 +639,16 @@ const CertificateSection = () => {
                   </li>
                   <li>Espera a que termine de firmar los certificados (1-3 min). Al final verá <em>"Certificados firmados correctamente."</em> y <em>"Servidor OpenVPN activado correctamente."</em></li>
                   <li>
-                    En <strong>Files</strong> descarga: <code>ca-{clientName || "cliente1"}.crt</code>,{" "}
+                    En <strong>Files</strong> descarga: <code>{caFileName}</code>,{" "}
                     <code>{clientName || "cliente1"}.crt</code> y{" "}
                     <code>{clientName || "cliente1"}.key</code>.
+                    {usesSharedCa && (
+                      <span className="block mt-1 text-xs">
+                        (<code>ca-ovpn.crt</code> es la <strong>misma para todos los
+                        usuarios</strong> de este router; el <code>.crt</code> y la{" "}
+                        <code>.key</code> son propios de cada usuario.)
+                      </span>
+                    )}
                   </li>
                   <li>
                     Ve a la pestaña <strong>Cliente</strong> (ya tiene tus datos
@@ -640,16 +678,23 @@ const CertificateSection = () => {
                   </h4>
                   <p className="text-sm text-emerald-700 dark:text-emerald-300 mb-5">
                     Tus datos ya están cargados en la pestaña <strong>Cliente</strong>.
-                    Cuando termines, puedes cerrar esta sesión y empezar una nueva
-                    configuración desde cero.
+                    Puedes <strong>añadir otro usuario</strong> al mismo servidor (no
+                    afecta a los ya creados), ir a generar el <code>.ovpn</code>, o
+                    cerrar la sesión.
                   </p>
-                  <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                  <div className="flex flex-col sm:flex-row flex-wrap gap-3 justify-center">
                     <Link
                       to="/configuracion"
                       className="bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-600 hover:to-cyan-600 text-white px-6 py-3 rounded-xl font-bold text-sm shadow-lg shadow-cyan-500/30 transition-all"
                     >
                       ⚙️ Ir a generar el .ovpn (Cliente)
                     </Link>
+                    <button
+                      onClick={handleNewUser}
+                      className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white px-6 py-3 rounded-xl font-bold text-sm shadow-lg shadow-emerald-500/30 transition-all"
+                    >
+                      ➕ Crear otro usuario (mismo servidor)
+                    </button>
                     <button
                       onClick={handleEndSession}
                       className="bg-rose-500 hover:bg-rose-600 text-white px-6 py-3 rounded-xl font-bold text-sm shadow-lg shadow-rose-500/30 transition-all"
