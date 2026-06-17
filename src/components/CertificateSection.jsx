@@ -608,7 +608,7 @@ const CertificateSection = () => {
                   </li>
                   <li>Espera a que termine de firmar los certificados (1-3 min). Al final verá <em>"Certificados firmados correctamente."</em> y <em>"Servidor OpenVPN activado correctamente."</em></li>
                   <li>
-                    En <strong>Files</strong> descarga: <code>ca.crt</code>,{" "}
+                    En <strong>Files</strong> descarga: <code>ca-{clientName || "cliente1"}.crt</code>,{" "}
                     <code>{clientName || "cliente1"}.crt</code> y{" "}
                     <code>{clientName || "cliente1"}.key</code>.
                   </li>
