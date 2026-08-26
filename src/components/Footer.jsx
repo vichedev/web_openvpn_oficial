@@ -8,10 +8,16 @@ import {
   FaWhatsapp,
 } from "react-icons/fa";
 
-const QUICK_LINKS = [
+// El asistente vive en /asistente/<paso>; el resto son paginas sueltas.
+const WIZARD_LINKS = [
+  { to: "/asistente/servidor", text: "1 · Servidor" },
+  { to: "/asistente/usuarios", text: "2 · Usuarios" },
+  { to: "/asistente/scripts", text: "3 · Scripts" },
+  { to: "/asistente/perfiles", text: "4 · Perfiles .ovpn" },
+];
+
+const SITE_LINKS = [
   { to: "/", text: "Inicio" },
-  { to: "/certificados", text: "Servidor" },
-  { to: "/configuracion", text: "Configurar" },
   { to: "/manual", text: "Manual" },
   { to: "/caracteristicas", text: "Características" },
   { to: "/descargas", text: "Descargas" },
@@ -41,43 +47,12 @@ const Footer = () => {
               </span>
             </div>
             <p className="text-slate-400 mb-6 leading-relaxed max-w-md">
-              Soluciones profesionales de VPN para MikroTik. Crea, configura y
-              conecta de forma segura con la mejor tecnología OpenVPN.
+              Monta un servidor OpenVPN en tu MikroTik y da de alta todos los
+              usuarios que necesites. Los scripts y los perfiles se generan en
+              tu propio navegador: ni los certificados ni las contraseñas salen
+              de tu equipo.
             </p>
 
-            <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-5 max-w-md">
-              <h4 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
-                <FaHeadset className="text-cyan-400" />
-                Soporte Técnico
-              </h4>
-              <div className="space-y-3 text-sm">
-                <a
-                  href="https://wa.link/9jq3j9"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-3 text-slate-300 hover:text-white transition-colors group"
-                >
-                  <FaWhatsapp className="text-emerald-400 text-lg group-hover:scale-110 transition-transform" />
-                  WhatsApp
-                </a>
-                <a
-                  href="mailto:soporte@maat.ec"
-                  className="flex items-center gap-3 text-slate-300 hover:text-white transition-colors group"
-                >
-                  <FaEnvelope className="text-sky-400 text-lg group-hover:scale-110 transition-transform" />
-                  soporte@maat.ec
-                </a>
-                <a
-                  href="https://wa.link/9jq3j9"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-3 text-slate-300 hover:text-white transition-colors group"
-                >
-                  <FaPhone className="text-indigo-400 text-lg group-hover:scale-110 transition-transform" />
-                  +593 99 103 1784
-                </a>
-              </div>
-            </div>
           </motion.div>
 
           {/* Enlaces rápidos */}
@@ -87,17 +62,30 @@ const Footer = () => {
             viewport={{ once: true }}
             transition={{ duration: 0.6, delay: 0.15 }}
           >
-            <h3 className="text-lg font-semibold text-white mb-5">
-              Navegación
-            </h3>
-            <ul className="space-y-3">
-              {QUICK_LINKS.map((l) => (
+            <h3 className="text-lg font-semibold text-white mb-5">Asistente</h3>
+            <ul className="space-y-3 mb-8">
+              {WIZARD_LINKS.map((l) => (
                 <li key={l.to}>
                   <Link
                     to={l.to}
                     className="text-slate-400 hover:text-cyan-300 transition-colors flex items-center gap-2 group"
                   >
                     <span className="w-1.5 h-1.5 rounded-full bg-sky-500 group-hover:scale-150 transition-transform" />
+                    {l.text}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+
+            <h3 className="text-lg font-semibold text-white mb-5">Navegación</h3>
+            <ul className="space-y-3">
+              {SITE_LINKS.map((l) => (
+                <li key={l.to}>
+                  <Link
+                    to={l.to}
+                    className="text-slate-400 hover:text-cyan-300 transition-colors flex items-center gap-2 group"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-500/60 group-hover:scale-150 transition-transform" />
                     {l.text}
                   </Link>
                 </li>
@@ -128,9 +116,9 @@ const Footer = () => {
         {/* Copyright */}
         <div className="border-t border-white/10 mt-12 pt-8 text-center text-sm text-slate-500">
           <p className="flex flex-col md:flex-row items-center justify-center gap-2">
-            <span>&copy; 2025 InigualitySoft. Todos los derechos reservados.</span>
+            <span>&copy; 2026 JhonnVic Tech. Todos los derechos reservados.</span>
             <span className="hidden md:inline">•</span>
-            <span>Soluciones VPN profesionales</span>
+            <span>Compatible con RouterOS 6, 7.0–7.16 y 7.17+</span>
           </p>
         </div>
       </div>

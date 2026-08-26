@@ -1,16 +1,22 @@
-version: '3.8'
-
 services:
-  web-openvpn-redise:  
+  web-openvpn:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: web-openvpn-redise  
+    container_name: web-openvpn
     ports:
-      - "8584:80"
+      - "8584:8080"
     networks:
       - webnet
     restart: always
+    read_only: true
+    # mode=1777 para que el usuario sin privilegios pueda escribir el pid y los
+    # temporales en el sistema de archivos de solo lectura.
+    tmpfs:
+      - /var/cache/nginx:mode=1777
+      - /run:mode=1777
+    security_opt:
+      - no-new-privileges:true
 
 networks:
   webnet:

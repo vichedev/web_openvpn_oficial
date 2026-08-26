@@ -186,7 +186,7 @@ const Hero = () => {
   }, [isDarkMode]);
 
   const handleConfigurarClick = () => {
-    navigate("/configuracion");
+    navigate("/asistente/servidor");
   };
 
   return (
@@ -365,9 +365,11 @@ const HeroContent = ({ onConfigurarClick }) => {
           {...fadeUp(0.45)}
           className="mb-9 max-w-2xl mx-auto text-base md:text-xl leading-relaxed text-slate-600 dark:text-slate-300"
         >
-          Crea el servidor, genera los certificados y descarga tu archivo{" "}
-          <span className="font-semibold text-sky-600 dark:text-cyan-300">.ovpn</span>{" "}
-          en minutos. Sin comandos complicados.
+          Monta el servidor una vez y da de alta{" "}
+          <span className="font-semibold text-sky-600 dark:text-cyan-300">
+            todos los usuarios que necesites
+          </span>
+          : cada uno con su certificado y su archivo .ovpn. Sin comandos complicados.
         </motion.p>
 
         {/* CTAs */}
@@ -390,9 +392,9 @@ const HeroContent = ({ onConfigurarClick }) => {
           className="grid grid-cols-1 md:grid-cols-3 gap-5 max-w-4xl mx-auto"
         >
           {[
-            { icon: "⚡", title: "Rápido", desc: "VPN lista en pocos minutos, sin configuraciones manuales." },
-            { icon: "🛡️", title: "Seguro", desc: "Certificados y cifrado AES con autenticación TLS." },
-            { icon: "🧩", title: "Sencillo", desc: "Copia, pega y descarga. La web hace el trabajo difícil." },
+            { icon: "👥", title: "Multiusuario", desc: "Un solo servidor en el router y tantos usuarios como quieras, cada uno con su certificado." },
+            { icon: "🔒", title: "Todo en tu navegador", desc: "Certificados y contraseñas nunca se envían a ningún servidor: no hay backend." },
+            { icon: "🧩", title: "Sin comandos", desc: "Importa un script en el MikroTik y descarga el .ovpn. La web hace el trabajo difícil." },
           ].map((f, i) => (
             <motion.div
               key={f.title}

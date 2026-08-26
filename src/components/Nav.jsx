@@ -4,8 +4,7 @@ import ThemeToggle from "./ThemeToggle";
 
 const LINKS = [
   { to: "/", label: "Inicio" },
-  { to: "/certificados", label: "Servidor" },
-  { to: "/configuracion", label: "Configurar" },
+  { to: "/asistente/servidor", label: "Asistente" },
   { to: "/manual", label: "Manual" },
   { to: "/caracteristicas", label: "Características" },
   { to: "/descargas", label: "Descargas" },

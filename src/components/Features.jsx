@@ -2,15 +2,60 @@ import React from "react";
 import { motion } from "framer-motion";
 
 const FEATURES = [
-  { icon: "⚡", title: "Alta Velocidad", description: "Conexiones ultrarrápidas con latencia mínima para una navegación fluida." },
-  { icon: "🛡️", title: "Seguridad Máxima", description: "Cifrado AES y protocolos TLS que protegen tus datos y tu privacidad." },
-  { icon: "🔧", title: "Fácil Configuración", description: "Interfaz intuitiva y generación automática: conectado en minutos." },
-  { icon: "🌐", title: "Multiplataforma", description: "Compatible con Windows, Mac, Linux, Android, iOS y routers MikroTik." },
-  { icon: "📊", title: "Monitoreo Real", description: "Comprueba el estado de la conexión y los clientes activos en todo momento." },
-  { icon: "🚀", title: "Rendimiento", description: "Optimizado para el mejor desempeño en cualquier condición de red." },
-  { icon: "🔒", title: "Conexión Estable", description: "Reconexión automática que mantiene tu VPN activa sin interrupciones." },
-  { icon: "💾", title: "Configuración Reutilizable", description: "Genera y descarga tus archivos .ovpn y scripts cuando los necesites." },
-  { icon: "👥", title: "Soporte 24/7", description: "Equipo técnico disponible para resolver cualquier incidencia." },
+  {
+    icon: "👥",
+    title: "Un servidor, muchos usuarios",
+    description:
+      "El MikroTik levanta un único servidor OpenVPN y todos los usuarios se conectan a él, cada uno con su propio certificado.",
+  },
+  {
+    icon: "➕",
+    title: "Añadir sin interrumpir",
+    description:
+      "El script de alta reutiliza la CA y el perfil existentes: los usuarios ya conectados no se enteran de nada.",
+  },
+  {
+    icon: "🚫",
+    title: "Revocación de accesos",
+    description:
+      "Genera el script que borra credenciales, corta la sesión activa y elimina el certificado de un usuario concreto.",
+  },
+  {
+    icon: "🔒",
+    title: "Sin servidor detrás",
+    description:
+      "Todo se genera en tu navegador. Los certificados que subes y las contraseñas nunca salen de tu equipo.",
+  },
+  {
+    icon: "🛡️",
+    title: "Scripts a prueba de inyección",
+    description:
+      "Cada dato se escapa antes de entrar al .rsc: una comilla en una contraseña no puede convertirse en un comando del router.",
+  },
+  {
+    icon: "🧮",
+    title: "Red validada de verdad",
+    description:
+      "Comprueba el CIDR, el pool y el gateway antes de generar nada, para que no acabes con rangos imposibles.",
+  },
+  {
+    icon: "🔧",
+    title: "RouterOS 6, 7 y 7.17+",
+    description:
+      "Tres ramas explícitas: servidor único en 6 y 7.0–7.16, multi-instancia a partir de 7.17.",
+  },
+  {
+    icon: "🌐",
+    title: "Multiplataforma",
+    description:
+      "Archivos .ovpn para Windows, macOS, Linux, Android e iOS, y script listo para enlazar otro MikroTik.",
+  },
+  {
+    icon: "⏳",
+    title: "Accesos temporales",
+    description:
+      "Elige la fecha de caducidad de los certificados: al vencer, la conexión deja de funcionar sola.",
+  },
 ];
 
 const STATS = [
