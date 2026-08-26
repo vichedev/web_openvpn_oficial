@@ -3,18 +3,32 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    image: web-openvpn:latest
     container_name: web-openvpn
+    restart: always
+
+    # PUERTOS:  <puerto del host> : <puerto dentro del contenedor>
+    #   - 8584 es por donde se entra desde fuera:  http://IP_DEL_SERVIDOR:8584
+    #   - 8080 es donde escucha nginx dentro del contenedor. NO cambiar sin
+    #     cambiar tambien "listen" en nginx/conf.d/default.conf y el EXPOSE del
+    #     Dockerfile: nginx corre como usuario sin privilegios y no puede abrir
+    #     el puerto 80.
     ports:
       - "8584:8080"
+
     networks:
       - webnet
-    restart: always
-    read_only: true
-    # mode=1777 para que el usuario sin privilegios pueda escribir el pid y los
-    # temporales en el sistema de archivos de solo lectura.
-    tmpfs:
-      - /var/cache/nginx:mode=1777
-      - /run:mode=1777
+
+    # --- Endurecimiento opcional -------------------------------------------
+    # Deja el contenedor con el sistema de archivos de solo lectura. Funciona,
+    # pero exige que los temporales de nginx vayan en tmpfs; si tu plataforma
+    # (Portainer, Swarm, etc.) no los monta con permisos de escritura para el
+    # uid 1001, nginx no arranca. Actívalo solo si lo has probado en tu entorno.
+    #
+    # read_only: true
+    # tmpfs:
+    #   - /var/cache/nginx:mode=1777
+    #   - /run:mode=1777
     security_opt:
       - no-new-privileges:true
 
