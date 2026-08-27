@@ -229,16 +229,16 @@ test("el firewall abre el puerto Y permite el forward (VPN sin internet)", () =>
   assert.ok(/chain=forward action=accept src-address=10\.10\.10\.0\/24/.test(script));
 });
 
-test("el NAT usa masquerade por defecto (router detras de modem)", () => {
-  const masq = generateServerScript({ routerVersion: "v7", users: USERS, publicIp: "1.2.3.4" });
-  assert.ok(masq.includes("action=masquerade"));
-  const srcnat = generateServerScript({
+test("el modo masquerade sigue disponible como opcion manual", () => {
+  const script = generateServerScript({
     routerVersion: "v7",
     users: USERS,
     publicIp: "1.2.3.4",
-    natMode: "srcnat",
+    network: "10.10.10.0/24",
+    natMode: "masquerade",
   });
-  assert.ok(srcnat.includes("action=src-nat to-addresses=1.2.3.4"));
+  assert.ok(script.includes("action=masquerade src-address=10.10.10.0/24"));
+  assert.ok(!script.includes("action=src-nat"));
 });
 
 test("los nombres de certificado no chocan entre VPN distintas del mismo router", () => {
@@ -372,29 +372,7 @@ test("se puede pedir que no se cree ninguna regla de NAT", () => {
   assert.ok(script.includes("Elegiste NO crear regla de NAT"));
 });
 
-test("el modo NAT automatico crea SIEMPRE la regla de salida de la VPN", () => {
-  const script = generateServerScript({
-    routerVersion: "v7",
-    users: USERS,
-    publicIp: "1.2.3.4",
-    natMode: "auto",
-  });
-  // Decide la accion en el router segun de quien sea la IP publica...
-  assert.ok(script.includes(":local pubPropia false"));
-  assert.ok(script.includes(":if ($pubPropia) do={"));
-  // ...pero en las dos ramas crea regla: la VPN nunca se queda sin NAT.
-  assert.ok(script.includes("action=src-nat to-addresses=1.2.3.4"));
-  assert.ok(script.includes("action=masquerade src-address="));
-  // Y la deja la primera.
-  assert.ok(/\/ip firewall nat move .* destination=0/.test(script));
-});
 
-test("auto es el modo por defecto", () => {
-  const script = generateServerScript({ routerVersion: "v7", users: USERS, publicIp: "1.2.3.4" });
-  // Sin indicar natMode se usa el automatico: decide la accion en el router.
-  assert.ok(script.includes(":local pubPropia false"));
-  assert.ok(script.includes("Se crea SIEMPRE la regla de salida de la VPN"));
-});
 
 test("el script de diagnostico solo lee, nunca modifica", () => {
   const script = generateDiagnosticScript({
@@ -521,42 +499,25 @@ test("randomVpnPort evita el 1194 y los puertos de gestion del router", () => {
   assert.ok(vistos.size > 100, "deberia variar de verdad");
 });
 
-test("el NAT automatico decide en el router entre src-nat y masquerade", () => {
-  const script = generateServerScript({
-    routerVersion: "v7",
-    vpnName: "vpn1",
-    publicIp: "177.234.251.34",
-    users: USERS,
-    network: "10.4.4.0/24",
-    natMode: "auto",
-  });
-  // Mira si la IP publica esta configurada en el propio router.
-  assert.ok(script.includes(":foreach a in=[/ip address find] do={"));
-  assert.ok(script.includes('[:pick $dir 0 [:find $dir "/"]] = "177.234.251.34"'));
-  // Rama 1: la IP es del router (vale aunque este en "lo") -> src-nat.
-  assert.ok(
-    script.includes(
-      "/ip firewall nat add chain=srcnat action=src-nat to-addresses=177.234.251.34 src-address=10.4.4.0/24"
-    )
-  );
-  // Rama 2: no lo es -> masquerade.
-  assert.ok(
-    script.includes("/ip firewall nat add chain=srcnat action=masquerade src-address=10.4.4.0/24")
-  );
-});
 
-test("las reglas de NAT solo se crean dentro de un condicional", () => {
-  // Ninguna regla puede quedar suelta: siempre bajo :if, para no pisar el NAT
-  // que ya da Internet al router.
-  const script = generateServerScript({
-    routerVersion: "v7",
-    users: USERS,
-    publicIp: "1.2.3.4",
-    natMode: "auto",
-  });
-  for (const linea of script.split("\n")) {
-    if (linea.startsWith("/ip firewall nat add")) {
-      assert.fail(`regla de NAT sin indentar (fuera del condicional): ${linea}`);
+test("toda regla de NAT filtra por src-address: no captura trafico ajeno", () => {
+  // Va en la posicion 0, asi que es imprescindible que solo coincida con el
+  // trafico de la VPN; el resto debe seguir cayendo en las reglas del router.
+  for (const natMode of ["srcnat", "masquerade"]) {
+    const script = generateServerScript({
+      routerVersion: "v7",
+      users: USERS,
+      publicIp: "1.2.3.4",
+      network: "10.4.4.0/24",
+      natMode,
+    });
+    for (const linea of script.split("\n")) {
+      if (linea.includes("/ip firewall nat add")) {
+        assert.ok(
+          linea.includes("src-address=10.4.4.0/24"),
+          `regla sin src-address en modo ${natMode}: ${linea}`
+        );
+      }
     }
   }
 });
@@ -575,4 +536,64 @@ test("el modo src-nat explicito genera la regla que el usuario espera", () => {
       '/ip firewall nat add chain=srcnat action=src-nat to-addresses=177.234.251.34 src-address=10.4.4.0/24 comment="OpenVPN-Web-NAT-vpn1"'
     )
   );
+});
+
+test("el NAT usa SIEMPRE src-nat a la IP publica indicada", () => {
+  const script = generateServerScript({
+    routerVersion: "v7",
+    vpnName: "vpn1",
+    publicIp: "177.234.251.34",
+    users: USERS,
+    network: "10.4.4.0/24",
+  });
+  assert.ok(
+    script.includes(
+      '/ip firewall nat add chain=srcnat action=src-nat to-addresses=177.234.251.34 src-address=10.4.4.0/24 comment="OpenVPN-Web-NAT-vpn1"'
+    ),
+    "debe emitir src-nat con la IP publica"
+  );
+  assert.ok(!script.includes("action=masquerade"), "no debe recurrir a masquerade");
+  assert.ok(
+    script.includes('/ip firewall nat move [find comment="OpenVPN-Web-NAT-vpn1"] destination=0'),
+    "la regla debe quedar la primera"
+  );
+});
+
+test("src-nat es el modo por defecto (sin indicar natMode)", () => {
+  const script = generateServerScript({
+    routerVersion: "v7",
+    users: USERS,
+    publicIp: "1.2.3.4",
+  });
+  assert.ok(script.includes("action=src-nat to-addresses=1.2.3.4"));
+  assert.ok(!script.includes("action=masquerade"));
+});
+
+test("con un dominio DDNS no hay src-nat posible: se avisa y se usa masquerade", () => {
+  // RouterOS exige una IP en to-addresses; con un nombre no se puede.
+  const script = generateServerScript({
+    routerVersion: "v7",
+    users: USERS,
+    publicIp: "vpn.midominio.ec",
+    network: "10.4.4.0/24",
+  });
+  assert.ok(script.includes("no es una IP"), "debe explicar por que cambia de modo");
+  assert.ok(script.includes("action=masquerade src-address=10.4.4.0/24"));
+  assert.ok(!script.includes("to-addresses=vpn.midominio.ec"));
+});
+
+test("las reglas de firewall y NAT quedan todas en la posicion 0", () => {
+  const script = generateServerScript({
+    routerVersion: "v7",
+    vpnName: "vpn1",
+    publicIp: "1.2.3.4",
+    users: USERS,
+  });
+  for (const comentario of ["OpenVPN-Web-vpn1", "OpenVPN-Web-FWD-vpn1", "OpenVPN-Web-NAT-vpn1"]) {
+    const tabla = comentario.includes("NAT") ? "nat" : "filter";
+    assert.ok(
+      script.includes(`/ip firewall ${tabla} move [find comment="${comentario}"] destination=0`),
+      `${comentario} deberia moverse a destination=0`
+    );
+  }
 });

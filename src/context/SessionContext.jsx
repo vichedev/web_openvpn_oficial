@@ -35,7 +35,7 @@ const emptySession = {
   localAddress: VPN_DEFAULTS.localAddress,
   poolRange: VPN_DEFAULTS.poolRange,
   dns: VPN_DEFAULTS.dns,
-  natMode: VPN_DEFAULTS.natMode, // auto | masquerade | srcnat | none
+  natMode: VPN_DEFAULTS.natMode, // srcnat | masquerade | none
   keySize: VPN_DEFAULTS.keySize,
   validUntil: "", // YYYY-MM-DD; vacio = hoy + 10 anios
 
@@ -103,9 +103,10 @@ function migrate(saved) {
     localAddress: pickString(saved.localAddress, emptySession.localAddress),
     poolRange: pickString(saved.poolRange, emptySession.poolRange),
     dns: pickString(saved.dns, emptySession.dns),
-    natMode: ["auto", "masquerade", "srcnat", "none"].includes(saved.natMode)
+    // "auto" era un modo anterior: las sesiones guardadas con el pasan a srcnat.
+    natMode: ["masquerade", "srcnat", "none"].includes(saved.natMode)
       ? saved.natMode
-      : "auto",
+      : "srcnat",
     keySize: ["1024", "2048", "4096"].includes(String(saved.keySize))
       ? String(saved.keySize)
       : emptySession.keySize,

@@ -113,13 +113,13 @@ export function useVpnConfig() {
       w.push(
         `${session.publicIp} es una IP privada. Si el MikroTik esta detras de un modem, tendras que redirigir el puerto ${session.port} hacia el router.`
       );
-    if (session.natMode === "srcnat")
+    if (session.natMode === "srcnat" && session.publicIp && !isValidIp(session.publicIp))
       w.push(
-        "Con src-nat la IP publica debe pertenecer a este MikroTik (vale aunque este en la interfaz 'lo')."
+        "Has indicado un dominio, no una IP. RouterOS necesita una IP en to-addresses, asi que el script usara masquerade. Escribe la IP publica fija si la tienes."
       );
     if (session.natMode === "masquerade")
       w.push(
-        "Masquerade traduce a la IP de la interfaz de salida. Si tu IP publica esta en la interfaz 'lo' y sales por CGNAT, la correcta es src-nat (el modo Automatico lo detecta solo)."
+        "Masquerade traduce a la IP de la interfaz de salida. Si tu IP publica esta en la interfaz 'lo' y sales por CGNAT, esa IP no tiene retorno: usa src-nat."
       );
     if (isV6 && session.protocol === "udp")
       w.push("RouterOS 6 solo soporta TCP en OpenVPN: el script forzara TCP.");

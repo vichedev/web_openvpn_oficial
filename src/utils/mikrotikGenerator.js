@@ -54,7 +54,7 @@ export const VPN_DEFAULTS = {
   netmask: "24",
   dns: "8.8.8.8,1.1.1.1",
   profileName: "ovpn-profile",
-  natMode: "auto",
+  natMode: "srcnat",
   keySize: "2048",
   daysValid: 3650,
 };
@@ -506,82 +506,55 @@ export function generateServerScript({
 
   // --- 6. NAT ----------------------------------------------------------------
   //
-  //  IMPORTANTE (aprendido en un router real): esta regla se anade AL FINAL de
-  //  la cadena, nunca en destination=0.
+  //  La salida a Internet de los clientes VPN se hace SIEMPRE con src-nat a la
+  //  IP publica indicada, y la regla se coloca la PRIMERA de la cadena.
   //
-  //  Muchos routers ya tienen su propia regla de salida, y puede ser la unica
-  //  correcta. Caso real: un router con la IP publica en la interfaz "lo" y un
-  //  enganche CGNAT en ether1 necesita 'src-nat to-addresses=<publica>', porque
-  //  es la unica IP que el ISP enruta de vuelta. Si nuestra regla masquerade se
-  //  coloca ANTES, captura el trafico de la VPN y lo traduce a la IP del
-  //  enganche: los paquetes salen y no vuelve ninguno. La VPN conecta pero no
-  //  hay Internet.
+  //  Por que src-nat y no masquerade: masquerade traduce a la IP de la interfaz
+  //  de salida. En un router cuya IP publica vive en la interfaz "lo" y que sale
+  //  por un enganche CGNAT, esa IP de salida no tiene retorno: los paquetes se
+  //  van y no vuelve ninguno (la VPN conecta pero no hay Internet). src-nat fija
+  //  la IP publica real, que es la unica que el ISP enruta de vuelta.
   //
-  //  Al ir al final, si el router ya NATea bien, nuestra regla ni se usa; y si
-  //  no habia ninguna, es la que hace el trabajo.
+  //  Va en destination=0 para que ninguna regla anterior se le adelante. Es
+  //  seguro porque filtra por src-address=<red VPN>: solo captura el trafico de
+  //  los clientes VPN; el resto sigue cayendo en las reglas de mas abajo.
   L.push("# --- 6. NAT: salida a Internet para los clientes VPN ---");
   L.push(`/ip firewall nat remove [find comment="${names.nat}"]`);
-  if (natMode === "auto") {
-    // Modo AUTOMATICO: SIEMPRE se crea la regla de salida de la VPN y se coloca
-    // la PRIMERA (destination=0), para que nada de lo que haya antes se le
-    // adelante. Es seguro porque la regla filtra por src-address=<red VPN>:
-    // solo captura el trafico de los clientes VPN, y el resto del trafico del
-    // router sigue cayendo en las reglas de mas abajo.
-    //
-    // Lo que el script decide en el router es QUE accion usar, porque desde la
-    // web no hay forma de saberlo y no son intercambiables:
-    //   · src-nat  -> traduce a una IP fija. Es lo correcto cuando la IP publica
-    //     pertenece al router, INCLUSO si esta en la interfaz "lo" y la salida
-    //     es un enganche CGNAT. Con masquerade ahi saldria con la IP del
-    //     enganche y el trafico no tendria retorno.
-    //   · masquerade -> traduce a la IP de la interfaz de salida. Correcto con
-    //     IP dinamica o con el router detras de un modem domestico.
-    L.push("# Se crea SIEMPRE la regla de salida de la VPN y se coloca la primera.");
-    L.push("# Filtra por src-address, asi que solo afecta al trafico de la VPN.");
-    L.push("");
-    L.push("# ¿La IP publica indicada pertenece a este router?");
-    L.push('# (cuenta aunque este en la interfaz "lo", caso tipico con CGNAT)');
-    L.push(":local pubPropia false");
-    L.push(":foreach a in=[/ip address find] do={");
-    L.push("  :local dir [/ip address get $a address]");
-    L.push(`  :if ([:pick $dir 0 [:find $dir "/"]] = "${host}") do={ :set pubPropia true }`);
-    L.push("}");
-    L.push(":if ($pubPropia) do={");
-    L.push(
-      `  /ip firewall nat add chain=srcnat action=src-nat to-addresses=${host} src-address=${safeNet} comment="${names.nat}"`
-    );
-    L.push(`  :put "NAT: src-nat a ${host} (esa IP publica es de este router)."`);
-    L.push("} else={");
-    L.push(
-      `  /ip firewall nat add chain=srcnat action=masquerade src-address=${safeNet} comment="${names.nat}"`
-    );
-    L.push(`  :put "NAT: masquerade (la IP ${host} no esta configurada en este router)."`);
-    L.push("}");
-  } else if (natMode === "none") {
+
+  // RouterOS exige una IP en to-addresses: con un dominio DDNS no hay src-nat
+  // posible y no queda mas remedio que masquerade.
+  const puedeSrcNat = Boolean(publicIp) && isValidIp(publicIp);
+
+  if (natMode === "none") {
     L.push("# Elegiste NO crear regla de NAT: el router ya tiene la suya y se");
     L.push("# encargara del trafico de la VPN. Si los clientes conectan pero no");
     L.push("# navegan, revisa esa regla existente.");
-  } else if (natMode === "srcnat" && publicIp && isValidIp(publicIp)) {
-    L.push("# Modo src-nat: traduce a una IP publica FIJA. Es lo correcto cuando");
-    L.push("# la IP publica es tuya aunque este en 'lo' (loopback) y la salida sea");
-    L.push("# un enganche CGNAT: masquerade usaria la IP del enganche y el trafico");
-    L.push("# no tendria retorno.");
-    L.push(
-      `/ip firewall nat add chain=srcnat action=src-nat to-addresses=${host} src-address=${safeNet} comment="${names.nat}"`
-    );
-  } else {
-    L.push("# Modo masquerade: traduce a la IP de la interfaz de salida. Vale para");
-    L.push("# IP dinamica y para el router detras de un modem domestico.");
+  } else if (natMode === "masquerade" || !puedeSrcNat) {
+    if (!puedeSrcNat && natMode !== "masquerade") {
+      L.push(`# AVISO: "${host}" no es una IP, y RouterOS necesita una IP en`);
+      L.push("# to-addresses. Se usa masquerade como unica alternativa. Si tu IP");
+      L.push("# publica es fija, escribela en la web y regenera este script.");
+    } else {
+      L.push("# Modo masquerade: traduce a la IP de la interfaz de salida.");
+      L.push("# Solo es correcto si esa interfaz tiene una IP con retorno.");
+    }
     L.push(
       `/ip firewall nat add chain=srcnat action=masquerade src-address=${safeNet} comment="${names.nat}"`
     );
+  } else {
+    L.push(`# src-nat a ${host}: es la IP que el ISP enruta de vuelta hacia este`);
+    L.push("# router, aunque este configurada en la interfaz 'lo' y la salida sea");
+    L.push("# un enganche CGNAT.");
+    L.push(
+      `/ip firewall nat add chain=srcnat action=src-nat to-addresses=${host} src-address=${safeNet} comment="${names.nat}"`
+    );
   }
-  // La regla se coloca la PRIMERA de la cadena para que ninguna anterior se
-  // le adelante. Solo captura trafico con origen en la red de la VPN, asi
-  // que el resto de reglas del router siguen funcionando igual.
+
+  // La regla va la PRIMERA: filtra por src-address, asi que solo captura el
+  // trafico de la VPN y no altera el resto de la cadena.
   if (natMode !== "none") {
     L.push(`/ip firewall nat move [find comment="${names.nat}"] destination=0`);
-    L.push('# La regla queda en la posicion 0: es la primera que se evalua.');
+    L.push("# Queda en la posicion 0: es la primera regla de srcnat que se evalua.");
   }
   L.push(':put "Servidor OpenVPN listo."');
   L.push("");

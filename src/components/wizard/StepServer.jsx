@@ -395,12 +395,11 @@ const StepServer = () => {
             value={session.natMode}
             onChange={(e) => updateSession({ natMode: e.target.value })}
             options={[
-              { value: "auto", label: "Automatico (recomendado)" },
+              { value: "srcnat", label: "src-nat a la IP publica (recomendado)" },
               { value: "masquerade", label: "Masquerade" },
-              { value: "srcnat", label: "src-nat a la IP publica" },
               { value: "none", label: "No crear regla" },
             ]}
-            hint="Automatico: crea la regla en la posicion 0 y decide la accion en el router — src-nat si la IP publica es suya (vale aunque este en 'lo'), masquerade si no lo es."
+            hint="src-nat traduce a tu IP publica, que es la unica con retorno cuando el router sale por CGNAT. La regla se coloca en la posicion 0 y solo afecta al trafico de la VPN."
           />
           <SelectField
             label="Tamano de clave"
