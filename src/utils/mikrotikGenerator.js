@@ -522,28 +522,40 @@ export function generateServerScript({
   L.push("# --- 6. NAT: salida a Internet para los clientes VPN ---");
   L.push(`/ip firewall nat remove [find comment="${names.nat}"]`);
   if (natMode === "auto") {
-    // Modo AUTOMATICO (por defecto): el router decide.
+    // Modo AUTOMATICO: SIEMPRE se crea la regla de salida de la VPN y se coloca
+    // la PRIMERA (destination=0), para que nada de lo que haya antes se le
+    // adelante. Es seguro porque la regla filtra por src-address=<red VPN>:
+    // solo captura el trafico de los clientes VPN, y el resto del trafico del
+    // router sigue cayendo en las reglas de mas abajo.
     //
-    // Si ya hay reglas de srcnat, son las que dan salida a Internet al resto de
-    // la red y casi siempre cubren tambien la VPN. Crear otra por delante es
-    // justo lo que rompe instalaciones como la del caso real que motivo esto:
-    // masquerade traducia a la IP del enganche CGNAT en vez de a la publica.
-    //
-    // Asi que: si no hay ninguna, creamos masquerade; si ya hay, no tocamos
-    // nada y avisamos por pantalla.
-    L.push("# Modo automatico: si el router ya tiene NAT de salida, se respeta.");
-    L.push(`:local otrasNat [:len [/ip firewall nat find chain=srcnat]]`);
-    L.push(":if ($otrasNat = 0) do={");
+    // Lo que el script decide en el router es QUE accion usar, porque desde la
+    // web no hay forma de saberlo y no son intercambiables:
+    //   · src-nat  -> traduce a una IP fija. Es lo correcto cuando la IP publica
+    //     pertenece al router, INCLUSO si esta en la interfaz "lo" y la salida
+    //     es un enganche CGNAT. Con masquerade ahi saldria con la IP del
+    //     enganche y el trafico no tendria retorno.
+    //   · masquerade -> traduce a la IP de la interfaz de salida. Correcto con
+    //     IP dinamica o con el router detras de un modem domestico.
+    L.push("# Se crea SIEMPRE la regla de salida de la VPN y se coloca la primera.");
+    L.push("# Filtra por src-address, asi que solo afecta al trafico de la VPN.");
+    L.push("");
+    L.push("# ¿La IP publica indicada pertenece a este router?");
+    L.push('# (cuenta aunque este en la interfaz "lo", caso tipico con CGNAT)');
+    L.push(":local pubPropia false");
+    L.push(":foreach a in=[/ip address find] do={");
+    L.push("  :local dir [/ip address get $a address]");
+    L.push(`  :if ([:pick $dir 0 [:find $dir "/"]] = "${host}") do={ :set pubPropia true }`);
+    L.push("}");
+    L.push(":if ($pubPropia) do={");
+    L.push(
+      `  /ip firewall nat add chain=srcnat action=src-nat to-addresses=${host} src-address=${safeNet} comment="${names.nat}"`
+    );
+    L.push(`  :put "NAT: src-nat a ${host} (esa IP publica es de este router)."`);
+    L.push("} else={");
     L.push(
       `  /ip firewall nat add chain=srcnat action=masquerade src-address=${safeNet} comment="${names.nat}"`
     );
-    L.push('  :put "NAT: no habia ninguna regla de salida; se creo masquerade para la VPN."');
-    L.push("} else={");
-    L.push(
-      '  :put "NAT: el router ya tiene $otrasNat regla(s) en srcnat; se respetan y NO se crea ninguna."'
-    );
-    L.push(`  :put "     Si los clientes conectan pero no navegan, comprueba que esas reglas"`);
-    L.push(`  :put "     cubran la red ${network} (mira /ip firewall nat print stats)."`);
+    L.push(`  :put "NAT: masquerade (la IP ${host} no esta configurada en este router)."`);
     L.push("}");
   } else if (natMode === "none") {
     L.push("# Elegiste NO crear regla de NAT: el router ya tiene la suya y se");
@@ -564,8 +576,13 @@ export function generateServerScript({
       `/ip firewall nat add chain=srcnat action=masquerade src-address=${safeNet} comment="${names.nat}"`
     );
   }
-  L.push("# NOTA: la regla queda al FINAL a proposito. Si el router ya tiene una");
-  L.push("# regla de salida que funciona, esa manda y esta no estorba.");
+  // La regla se coloca la PRIMERA de la cadena para que ninguna anterior se
+  // le adelante. Solo captura trafico con origen en la red de la VPN, asi
+  // que el resto de reglas del router siguen funcionando igual.
+  if (natMode !== "none") {
+    L.push(`/ip firewall nat move [find comment="${names.nat}"] destination=0`);
+    L.push('# La regla queda en la posicion 0: es la primera que se evalua.');
+  }
   L.push(':put "Servidor OpenVPN listo."');
   L.push("");
 

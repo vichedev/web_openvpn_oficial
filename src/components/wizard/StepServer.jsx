@@ -400,7 +400,7 @@ const StepServer = () => {
               { value: "srcnat", label: "src-nat a la IP publica" },
               { value: "none", label: "No crear regla" },
             ]}
-            hint="Automatico respeta las reglas de salida que ya tenga el router."
+            hint="Automatico: crea la regla en la posicion 0 y decide la accion en el router — src-nat si la IP publica es suya (vale aunque este en 'lo'), masquerade si no lo es."
           />
           <SelectField
             label="Tamano de clave"

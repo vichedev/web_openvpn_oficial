@@ -334,18 +334,29 @@ test("el script de router cliente escapa credenciales y añade rutas", () => {
   assert.ok(script.includes("/ip route add dst-address=192.168.88.0/24"));
 });
 
-test("la regla de NAT NO se coloca la primera: no debe pisar la del router", () => {
-  // Caso real: un router con la IP publica en 'lo' y salida por CGNAT necesita
-  // su propio src-nat. Si nuestra regla masquerade se pusiera en destination=0,
-  // capturaria el trafico de la VPN y lo dejaria sin retorno.
+test("la regla de NAT se coloca la PRIMERA de la cadena", () => {
+  // Va en destination=0 para que ninguna regla anterior se le adelante. Es
+  // seguro porque filtra por src-address: solo captura el trafico de la VPN.
   const script = generateServerScript({
     routerVersion: "v7",
     vpnName: "oficina",
     publicIp: "1.2.3.4",
     users: USERS,
+    network: "10.10.10.0/24",
   });
-  assert.ok(!/\/ip firewall nat move .* destination=0/.test(script));
-  // Las reglas de filtro SI van primero, para saltarse los drop existentes.
+  assert.ok(
+    script.includes('/ip firewall nat move [find comment="OpenVPN-Web-NAT-oficina"] destination=0')
+  );
+  // Y toda regla creada lleva src-address, para no tocar el resto del trafico.
+  for (const linea of script.split("\n")) {
+    if (linea.includes("/ip firewall nat add")) {
+      assert.ok(
+        linea.includes("src-address=10.10.10.0/24"),
+        `regla de NAT sin src-address: ${linea}`
+      );
+    }
+  }
+  // Las de filtro tambien van primero, para saltarse los drop existentes.
   assert.ok(/\/ip firewall filter move \[find comment="OpenVPN-Web-oficina"\] destination=0/.test(script));
 });
 
@@ -361,24 +372,28 @@ test("se puede pedir que no se cree ninguna regla de NAT", () => {
   assert.ok(script.includes("Elegiste NO crear regla de NAT"));
 });
 
-test("el modo NAT automatico respeta las reglas que ya tiene el router", () => {
-  // Este es el caso que rompio un router real: la regla nueva se ponia delante
-  // de la que ya funcionaba y dejaba la VPN sin retorno.
+test("el modo NAT automatico crea SIEMPRE la regla de salida de la VPN", () => {
   const script = generateServerScript({
     routerVersion: "v7",
     users: USERS,
     publicIp: "1.2.3.4",
     natMode: "auto",
   });
-  assert.ok(script.includes(":local otrasNat [:len [/ip firewall nat find chain=srcnat]]"));
-  assert.ok(script.includes(":if ($otrasNat = 0) do={"));
-  // Solo crea masquerade dentro del if, nunca incondicionalmente.
-  assert.ok(!/^\/ip firewall nat add/m.test(script));
+  // Decide la accion en el router segun de quien sea la IP publica...
+  assert.ok(script.includes(":local pubPropia false"));
+  assert.ok(script.includes(":if ($pubPropia) do={"));
+  // ...pero en las dos ramas crea regla: la VPN nunca se queda sin NAT.
+  assert.ok(script.includes("action=src-nat to-addresses=1.2.3.4"));
+  assert.ok(script.includes("action=masquerade src-address="));
+  // Y la deja la primera.
+  assert.ok(/\/ip firewall nat move .* destination=0/.test(script));
 });
 
 test("auto es el modo por defecto", () => {
   const script = generateServerScript({ routerVersion: "v7", users: USERS, publicIp: "1.2.3.4" });
-  assert.ok(script.includes("Modo automatico"));
+  // Sin indicar natMode se usa el automatico: decide la accion en el router.
+  assert.ok(script.includes(":local pubPropia false"));
+  assert.ok(script.includes("Se crea SIEMPRE la regla de salida de la VPN"));
 });
 
 test("el script de diagnostico solo lee, nunca modifica", () => {
@@ -504,4 +519,60 @@ test("randomVpnPort evita el 1194 y los puertos de gestion del router", () => {
     vistos.add(port);
   }
   assert.ok(vistos.size > 100, "deberia variar de verdad");
+});
+
+test("el NAT automatico decide en el router entre src-nat y masquerade", () => {
+  const script = generateServerScript({
+    routerVersion: "v7",
+    vpnName: "vpn1",
+    publicIp: "177.234.251.34",
+    users: USERS,
+    network: "10.4.4.0/24",
+    natMode: "auto",
+  });
+  // Mira si la IP publica esta configurada en el propio router.
+  assert.ok(script.includes(":foreach a in=[/ip address find] do={"));
+  assert.ok(script.includes('[:pick $dir 0 [:find $dir "/"]] = "177.234.251.34"'));
+  // Rama 1: la IP es del router (vale aunque este en "lo") -> src-nat.
+  assert.ok(
+    script.includes(
+      "/ip firewall nat add chain=srcnat action=src-nat to-addresses=177.234.251.34 src-address=10.4.4.0/24"
+    )
+  );
+  // Rama 2: no lo es -> masquerade.
+  assert.ok(
+    script.includes("/ip firewall nat add chain=srcnat action=masquerade src-address=10.4.4.0/24")
+  );
+});
+
+test("las reglas de NAT solo se crean dentro de un condicional", () => {
+  // Ninguna regla puede quedar suelta: siempre bajo :if, para no pisar el NAT
+  // que ya da Internet al router.
+  const script = generateServerScript({
+    routerVersion: "v7",
+    users: USERS,
+    publicIp: "1.2.3.4",
+    natMode: "auto",
+  });
+  for (const linea of script.split("\n")) {
+    if (linea.startsWith("/ip firewall nat add")) {
+      assert.fail(`regla de NAT sin indentar (fuera del condicional): ${linea}`);
+    }
+  }
+});
+
+test("el modo src-nat explicito genera la regla que el usuario espera", () => {
+  const script = generateServerScript({
+    routerVersion: "v7",
+    vpnName: "vpn1",
+    publicIp: "177.234.251.34",
+    users: USERS,
+    network: "10.4.4.0/24",
+    natMode: "srcnat",
+  });
+  assert.ok(
+    script.includes(
+      '/ip firewall nat add chain=srcnat action=src-nat to-addresses=177.234.251.34 src-address=10.4.4.0/24 comment="OpenVPN-Web-NAT-vpn1"'
+    )
+  );
 });

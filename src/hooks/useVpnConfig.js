@@ -119,7 +119,7 @@ export function useVpnConfig() {
       );
     if (session.natMode === "masquerade")
       w.push(
-        "Si el router ya tiene su propia regla de salida, el modo Automatico la respeta; masquerade podria pisarla."
+        "Masquerade traduce a la IP de la interfaz de salida. Si tu IP publica esta en la interfaz 'lo' y sales por CGNAT, la correcta es src-nat (el modo Automatico lo detecta solo)."
       );
     if (isV6 && session.protocol === "udp")
       w.push("RouterOS 6 solo soporta TCP en OpenVPN: el script forzara TCP.");
